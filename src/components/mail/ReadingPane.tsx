@@ -32,7 +32,14 @@ import {
   Send,
   Clock,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Tag,
+  Calendar as CalendarIcon,
+  Video,
+  MapPin,
+  HelpCircle,
+  XCircle,
+  Zap
 } from 'lucide-react';
 import { EmailMessage, EmailAttachment } from '../../types/mail';
 import { EmptyInboxGraphic } from './EmptyInboxGraphic';
@@ -62,6 +69,10 @@ interface ReadingPaneProps {
     body: string;
   }) => void;
   readingPanePosition: 'right' | 'bottom' | 'off';
+  onCategorize?: (category: string) => void;
+  onSnooze?: (timeTitle: string) => void;
+  onQuickStep?: (stepId: 'done' | 'team_review' | 'follow_up') => void;
+  onUpdateMeetingStatus?: (msgId: string, status: 'accepted' | 'tentative' | 'declined') => void;
 }
 
 export function ReadingPane({
@@ -77,8 +88,25 @@ export function ReadingPane({
   onTogglePin,
   onSendInlineReply,
   onOpenFullCompose,
-  readingPanePosition
+  readingPanePosition,
+  onCategorize,
+  onSnooze,
+  onQuickStep,
+  onUpdateMeetingStatus
 }: ReadingPaneProps) {
+  // Category & Quick Action Popovers
+  const [isCategorizeOpen, setIsCategorizeOpen] = useState(false);
+  const [isSnoozeOpen, setIsSnoozeOpen] = useState(false);
+  const [isQuickStepOpen, setIsQuickStepOpen] = useState(false);
+  const [rsvpStatus, setRsvpStatus] = useState<'accepted' | 'tentative' | 'declined' | null>(null);
+
+  // Sync rsvp status when selected message changes
+  useEffect(() => {
+    setRsvpStatus(message?.meetingInvite?.status || null);
+    setIsCategorizeOpen(false);
+    setIsSnoozeOpen(false);
+    setIsQuickStepOpen(false);
+  }, [message?.id, message?.meetingInvite?.status]);
   // Inline Reply state
   const [inlineMode, setInlineMode] = useState<'reply' | 'replyAll' | 'forward'>('reply');
   const [replyText, setReplyText] = useState('');
@@ -243,6 +271,28 @@ export function ReadingPane({
                   Pinned
                 </span>
               )}
+
+              {/* Category pill */}
+              {message.category && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold border ${
+                    message.category.toLowerCase().includes('green')
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : message.category.toLowerCase().includes('purple')
+                      ? 'bg-purple-50 text-purple-800 border-purple-300'
+                      : message.category.toLowerCase().includes('orange')
+                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                      : message.category.toLowerCase().includes('red')
+                      ? 'bg-rose-50 text-rose-800 border-rose-300'
+                      : message.category.toLowerCase().includes('yellow')
+                      ? 'bg-yellow-50 text-yellow-800 border-yellow-300'
+                      : 'bg-blue-50 text-blue-800 border-blue-300'
+                  }`}
+                >
+                  <Tag size={11} />
+                  {message.category}
+                </span>
+              )}
             </div>
 
             {/* Conversation Thread Stats */}
@@ -359,6 +409,156 @@ export function ReadingPane({
             >
               <Printer size={16} />
             </button>
+
+            {/* Categorize button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsCategorizeOpen(!isCategorizeOpen)}
+                className="p-1.5 text-gray-600 hover:text-brand-cobalt hover:bg-gray-100 rounded-none transition-colors"
+                title="Categorize"
+              >
+                <Tag size={16} />
+              </button>
+              {isCategorizeOpen && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 shadow-lg py-1 z-50 text-xs rounded-none ring-1 ring-black/5">
+                  <div className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Categories
+                  </div>
+                  {[
+                    { name: 'Blue', color: 'bg-blue-500' },
+                    { name: 'Green', color: 'bg-emerald-500' },
+                    { name: 'Orange', color: 'bg-amber-500' },
+                    { name: 'Purple', color: 'bg-purple-500' },
+                    { name: 'Red', color: 'bg-rose-500' },
+                    { name: 'Yellow', color: 'bg-yellow-500' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.name}
+                      type="button"
+                      onClick={() => {
+                        setIsCategorizeOpen(false);
+                        onCategorize?.(cat.name);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 text-left text-gray-800"
+                    >
+                      <span className={`w-3 h-3 rounded-xs ${cat.color}`} />
+                      <span>{cat.name} category</span>
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCategorizeOpen(false);
+                      onCategorize?.('');
+                    }}
+                    className="w-full flex items-center px-3 py-1.5 hover:bg-gray-100 text-left text-gray-500"
+                  >
+                    Clear categories
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Snooze button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsSnoozeOpen(!isSnoozeOpen)}
+                className="p-1.5 text-gray-600 hover:text-brand-cobalt hover:bg-gray-100 rounded-none transition-colors"
+                title="Snooze"
+              >
+                <Clock size={16} />
+              </button>
+              {isSnoozeOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 shadow-lg py-1 z-50 text-xs rounded-none ring-1 ring-black/5">
+                  <div className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Snooze until
+                  </div>
+                  {[
+                    { label: 'Later today', time: '6:00 PM' },
+                    { label: 'Tomorrow', time: '8:00 AM' },
+                    { label: 'This weekend', time: 'Saturday, 8:00 AM' },
+                    { label: 'Next week', time: 'Monday, 8:00 AM' }
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => {
+                        setIsSnoozeOpen(false);
+                        onSnooze?.(item.label);
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100 text-left text-gray-800"
+                    >
+                      <span className="font-medium">{item.label}</span>
+                      <span className="text-gray-400 text-[11px]">{item.time}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Steps button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsQuickStepOpen(!isQuickStepOpen)}
+                className="p-1.5 text-gray-600 hover:text-brand-cobalt hover:bg-gray-100 rounded-none transition-colors"
+                title="Quick Steps"
+              >
+                <Zap size={16} />
+              </button>
+              {isQuickStepOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 shadow-lg py-1 z-50 text-xs rounded-none ring-1 ring-black/5">
+                  <div className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Quick Steps
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickStepOpen(false);
+                      onQuickStep?.('done');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 text-left text-gray-800"
+                  >
+                    <Check size={14} className="text-emerald-600" />
+                    <div>
+                      <div className="font-semibold">Done</div>
+                      <div className="text-[10px] text-gray-500">Mark read &amp; move to Archive</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickStepOpen(false);
+                      onQuickStep?.('follow_up');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 text-left text-gray-800"
+                  >
+                    <Flag size={14} className="text-amber-600" />
+                    <div>
+                      <div className="font-semibold">Follow-up</div>
+                      <div className="text-[10px] text-gray-500">Flag with Orange category</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickStepOpen(false);
+                      onQuickStep?.('team_review');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 text-left text-gray-800"
+                  >
+                    <Forward size={14} className="text-blue-600" />
+                    <div>
+                      <div className="font-semibold">Team Review</div>
+                      <div className="text-[10px] text-gray-500">Forward thread to team</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -392,6 +592,115 @@ export function ReadingPane({
               >
                 Always trust {message.from.name}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Meeting Invitation Card */}
+        {message.meetingInvite && (
+          <div className="mt-3 p-4 bg-[#F0F6FF] border border-[#CCE2F8] shadow-xs">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-brand-cobalt text-white flex flex-col items-center justify-center font-bold text-xs flex-shrink-0">
+                  <CalendarIcon size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider font-bold text-brand-cobalt">
+                      Meeting Invitation
+                    </span>
+                    {message.meetingInvite.isTeams && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-xs">
+                        <Video size={10} /> Teams Meeting
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-900 mt-0.5">
+                    {message.meetingInvite.title}
+                  </h3>
+                  <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={12} className="text-gray-400" />
+                      <span>{message.meetingInvite.start} – {message.meetingInvite.end}</span>
+                    </div>
+                    {message.meetingInvite.location && (
+                      <div className="flex items-center gap-1.5">
+                        <MapPin size={12} className="text-gray-400" />
+                        <span>{message.meetingInvite.location}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RSVP Actions or Status */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {rsvpStatus ? (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-xs font-medium">
+                    {rsvpStatus === 'accepted' && (
+                      <span className="text-emerald-700 flex items-center gap-1 font-semibold">
+                        <Check size={14} /> You accepted this invitation
+                      </span>
+                    )}
+                    {rsvpStatus === 'tentative' && (
+                      <span className="text-amber-700 flex items-center gap-1 font-semibold">
+                        <HelpCircle size={14} /> You tentatively accepted
+                      </span>
+                    )}
+                    {rsvpStatus === 'declined' && (
+                      <span className="text-red-700 flex items-center gap-1 font-semibold">
+                        <XCircle size={14} /> You declined this invitation
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRsvpStatus(null)}
+                      className="text-[11px] text-gray-400 hover:text-gray-600 underline ml-1"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 bg-white border border-gray-200 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRsvpStatus('accepted');
+                        onUpdateMeetingStatus?.(message.id, 'accepted');
+                      }}
+                      className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"
+                      title="Accept meeting"
+                    >
+                      <Check size={13} />
+                      <span>Accept</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRsvpStatus('tentative');
+                        onUpdateMeetingStatus?.(message.id, 'tentative');
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold transition-colors"
+                      title="Tentative"
+                    >
+                      <HelpCircle size={13} />
+                      <span>Tentative</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRsvpStatus('declined');
+                        onUpdateMeetingStatus?.(message.id, 'declined');
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-800 text-xs font-semibold transition-colors"
+                      title="Decline"
+                    >
+                      <XCircle size={13} />
+                      <span>Decline</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

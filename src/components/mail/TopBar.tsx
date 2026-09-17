@@ -164,10 +164,11 @@ export function TopBar({
             <Search size={15} />
           </div>
           <input
+            id="global-search-input"
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search"
+            placeholder="Search (Press / to focus)"
             className="w-full pl-9 pr-9 py-1.5 text-xs sm:text-sm bg-white text-[#1F2937] placeholder-gray-500 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-white/50 shadow-xs"
           />
           {searchQuery ? (

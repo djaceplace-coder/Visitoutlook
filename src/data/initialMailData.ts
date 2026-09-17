@@ -74,7 +74,7 @@ The Outlook Product Team`,
     from: { name: 'Sarah Jenkins', email: 's.jenkins@meridian.io' },
     to: [{ name: 'Alex Bennett', email: 'alex.bennett@outlook.com' }],
     cc: [{ name: 'Marcus Chen', email: 'm.chen@meridian.io' }],
-    subject: 'Q4 Product Roadmap & Executive Review Deck',
+    subject: 'Invitation: Q4 Product Roadmap & Executive Review Deck',
     preview: 'Attached is the revised keynote deck including the updated timeline for November beta...',
     body: `Hi Alex,
 
@@ -89,11 +89,21 @@ VP Product | Meridian`,
     timestamp: Date.now() - 1000 * 60 * 120,
     read: false,
     flagged: true,
+    category: 'Green',
     hasAttachments: true,
     attachments: [
       { id: 'att-1', name: 'Q4_Roadmap_Review_v3.pdf', size: '3.4 MB', type: 'pdf' },
       { id: 'att-2', name: 'Beta_Milestone_Matrix.xlsx', size: '420 KB', type: 'sheet' }
-    ]
+    ],
+    meetingInvite: {
+      title: 'Q4 Product Roadmap & Executive Review Sync',
+      start: 'Tomorrow at 10:00 AM',
+      end: 'Tomorrow at 11:30 AM',
+      location: 'Microsoft Teams Meeting',
+      isTeams: true,
+      status: 'pending',
+      organizer: { name: 'Sarah Jenkins', email: 's.jenkins@meridian.io' }
+    }
   },
   {
     id: 'msg-3',
@@ -140,6 +150,7 @@ Elena`,
     timestamp: Date.now() - 1000 * 60 * 60 * 24,
     read: false,
     flagged: false,
+    category: 'Purple',
     hasAttachments: true,
     attachments: [
       { id: 'att-3', name: 'Outlook_Token_Spec_2026.pdf', size: '1.8 MB', type: 'pdf' },

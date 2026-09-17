@@ -27,7 +27,8 @@ import {
   LifeBuoy,
   FileSpreadsheet,
   FileImage,
-  ExternalLink
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 import { CommandRibbon } from '../mail/CommandRibbon';
 import { FolderPane } from '../mail/FolderPane';
@@ -59,6 +60,9 @@ interface InboxSectionProps {
   onNavigateToSection?: (section: 'inbox' | 'calendar' | 'people' | 'tasks' | 'apps') => void;
   prefillCompose?: { to: string; subject?: string } | null;
   onClearPrefillCompose?: () => void;
+  autoRepliesEnabled?: boolean;
+  onDisableAutoReplies?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function InboxSection({
@@ -75,6 +79,9 @@ export function InboxSection({
   onNavigateToSection,
   prefillCompose,
   onClearPrefillCompose,
+  autoRepliesEnabled = false,
+  onDisableAutoReplies,
+  onOpenSettings,
 }: InboxSectionProps) {
   // Data state
   const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
@@ -299,11 +306,49 @@ export function InboxSection({
           e.preventDefault();
           handleToggleRead();
         }
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (selectedMessage) {
+          e.preventDefault();
+          setComposeTo(selectedMessage.from.email);
+          setComposeSubject(`Re: ${selectedMessage.subject}`);
+          setIsComposeOpen(true);
+        }
+      } else if (e.key === 'a' || e.key === 'A') {
+        if (selectedMessage) {
+          e.preventDefault();
+          setComposeTo(selectedMessage.from.email);
+          setComposeSubject(`Re: ${selectedMessage.subject}`);
+          setIsComposeOpen(true);
+        }
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (selectedMessage) {
+          e.preventDefault();
+          setComposeSubject(`Fwd: ${selectedMessage.subject}`);
+          setComposeBody(`\n\n--- Forwarded Message ---\nFrom: ${selectedMessage.from.name} <${selectedMessage.from.email}>\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`);
+          setIsComposeOpen(true);
+        }
+      } else if (e.key === 's' || e.key === 'S') {
+        if (selectedMessageId) {
+          e.preventDefault();
+          handleToggleFlag();
+        }
+      } else if (e.key === 'j' || e.key === 'J') {
+        if (selectedMessageId) {
+          e.preventDefault();
+          handleReportJunk();
+        }
+      } else if (e.key === '/') {
+        e.preventDefault();
+        const searchInput = document.getElementById('global-search-input') as HTMLInputElement | null;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedMessageId, isKeyboardModalOpen, isWhatsNewOpen, isSupportOpen, isComposeOpen, selectedMessageIds]);
+  }, [selectedMessageId, selectedMessage, isKeyboardModalOpen, isWhatsNewOpen, isSupportOpen, isComposeOpen, selectedMessageIds]);
 
   // Selection handlers
   const handleToggleSelectMessage = (id: string, multiSelect?: boolean) => {
@@ -463,6 +508,94 @@ export function InboxSection({
     } else if (selectedMessageId) {
       handleToggleFlagMessages([selectedMessageId]);
     }
+  };
+
+  const handleSnooze = (timeTitle: string) => {
+    if (!selectedMessageId) return;
+    const targetId = selectedMessageId;
+    const originalMsg = messages.find(m => m.id === targetId);
+    if (!originalMsg) return;
+
+    setMessages(prev => prev.map(m => m.id === targetId ? { ...m, snoozedUntil: timeTitle } : m));
+
+    // Select next message in folder if available
+    const remaining = messages.filter(m => m.folder === activeFolderId && m.id !== targetId);
+    if (remaining.length > 0) {
+      setSelectedMessageId(remaining[0].id);
+    } else {
+      setSelectedMessageId(null);
+    }
+
+    setToast({
+      message: `Message snoozed until ${timeTitle.toLowerCase()}.`,
+      onUndo: () => {
+        setMessages(prev => prev.map(m => m.id === targetId ? { ...m, snoozedUntil: undefined } : m));
+        setSelectedMessageId(targetId);
+      }
+    });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  const handleCategorize = (category: string) => {
+    const targetIds = selectedMessageIds.size > 0 ? Array.from(selectedMessageIds) : selectedMessageId ? [selectedMessageId] : [];
+    if (targetIds.length === 0) return;
+
+    setMessages(prev => prev.map(m => targetIds.includes(m.id) ? { ...m, category: category || undefined } : m));
+    if (category) {
+      setToast({ message: `Assigned ${category} category.` });
+    } else {
+      setToast({ message: 'Cleared categories.' });
+    }
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleQuickStep = (stepId: 'done' | 'team_review' | 'follow_up') => {
+    if (!selectedMessageId) return;
+    const targetId = selectedMessageId;
+    const msg = messages.find(m => m.id === targetId);
+    if (!msg) return;
+
+    if (stepId === 'done') {
+      // Mark read & move to Archive
+      setMessages(prev => prev.map(m => m.id === targetId ? { ...m, read: true, folder: 'archive' } : m));
+      setToast({
+        message: 'Quick Step "Done" executed: Marked read and moved to Archive.',
+        onUndo: () => {
+          setMessages(prev => prev.map(m => m.id === targetId ? { ...m, folder: msg.folder, read: msg.read } : m));
+        }
+      });
+      setTimeout(() => setToast(null), 5000);
+    } else if (stepId === 'follow_up') {
+      // Flag with Orange category
+      setMessages(prev => prev.map(m => m.id === targetId ? { ...m, flagged: true, category: 'Orange' } : m));
+      setToast({ message: 'Quick Step "Follow-up" executed: Flagged with Orange category.' });
+      setTimeout(() => setToast(null), 3000);
+    } else if (stepId === 'team_review') {
+      // Forward thread to team
+      setComposeTo('team-engineering@meridian.io');
+      setComposeSubject(`FW: [Team Review Required] ${msg.subject}`);
+      setComposeBody(`\n\n--- Please review this thread ---\nFrom: ${msg.from.name} <${msg.from.email}>\nDate: ${msg.date}\nSubject: ${msg.subject}\n\n${msg.body}`);
+      setIsComposeOpen(true);
+    }
+  };
+
+  const handleUpdateMeetingStatus = (msgId: string, status: 'accepted' | 'tentative' | 'declined') => {
+    setMessages(prev => prev.map(m => {
+      if (m.id === msgId && m.meetingInvite) {
+        return {
+          ...m,
+          meetingInvite: {
+            ...m.meetingInvite,
+            status
+          }
+        };
+      }
+      return m;
+    }));
+
+    const statusLabel = status === 'accepted' ? 'Accepted' : status === 'tentative' ? 'Tentatively accepted' : 'Declined';
+    setToast({ message: `${statusLabel} meeting invitation.` });
+    setTimeout(() => setToast(null), 3500);
   };
 
   const handleSendInlineReply = (replyData: {
@@ -744,7 +877,39 @@ export function InboxSection({
         onOpenKeyboardShortcuts={() => setIsKeyboardModalOpen(true)}
         onOpenWhatsNew={() => setIsWhatsNewOpen(true)}
         onOpenSupport={() => setIsSupportOpen(true)}
+        onCategorize={handleCategorize}
+        onSnooze={handleSnooze}
+        onQuickStep={handleQuickStep}
+        onNavigateToSection={onNavigateToSection}
       />
+
+      {/* Out of Office / Automatic Replies Active Banner */}
+      {autoRepliesEnabled && (
+        <div className="bg-[#FFF4CE] border-b border-[#FED95B] px-4 py-2 flex items-center justify-between text-xs text-[#7A4D05] flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={15} className="text-[#8F5B00] flex-shrink-0" />
+            <span>
+              <strong>Automatic replies</strong> are currently turned on for your account. Incoming senders will receive your out-of-office response.
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onDisableAutoReplies}
+              className="font-semibold text-brand-cobalt hover:underline cursor-pointer"
+            >
+              Turn off
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="text-gray-600 hover:text-gray-900 underline cursor-pointer"
+            >
+              Settings
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Three-Pane Mail Client Layout */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -834,6 +999,10 @@ export function InboxSection({
                 setIsComposeOpen(true);
               }}
               readingPanePosition={readingPanePosition}
+              onCategorize={handleCategorize}
+              onSnooze={handleSnooze}
+              onQuickStep={handleQuickStep}
+              onUpdateMeetingStatus={handleUpdateMeetingStatus}
             />
           )}
         </div>

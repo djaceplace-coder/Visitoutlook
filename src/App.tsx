@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Splash } from './components/Splash';
 import { SignIn } from './components/SignIn';
 import { AppShell, Section } from './components/AppShell';
 import { InboxSection } from './components/sections/InboxSection';
@@ -15,11 +14,14 @@ import { AppsSection } from './components/sections/AppsSection';
 import { SettingsPanel, OutlookSettings } from './components/mail/SettingsPanel';
 import { AdvancedSearchModal, AdvancedSearchFilters } from './components/mail/AdvancedSearchModal';
 import { INITIAL_FOLDERS } from './data/initialMailData';
+import { EnvelopeLoader } from './components/EnvelopeLoader';
+import { IconLoader } from './components/IconLoader';
 
-type AppState = 'splash' | 'signin' | 'app';
+type AppState = 'entry-loader' | 'signin' | 'post-signin-loader' | 'app';
 
 export default function App() {
-  const [appState, setAppState] = useState<AppState>('app');
+  const [appState, setAppState] = useState<AppState>('entry-loader');
+  const [userEmail, setUserEmail] = useState('alex.bennett@outlook.com');
   const [currentSection, setCurrentSection] = useState<Section>('inbox');
   const [isFolderPaneOpen, setIsFolderPaneOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,21 +55,28 @@ export default function App() {
     }
   }, [settings.themeColor, settings.isDarkMode]);
 
-  useEffect(() => {
-    if (appState === 'splash') {
-      const timer = setTimeout(() => {
-        setAppState('signin');
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [appState]);
-
-  if (appState === 'splash') {
-    return <Splash />;
+  if (appState === 'entry-loader') {
+    return <EnvelopeLoader onComplete={() => setAppState('signin')} />;
   }
 
   if (appState === 'signin') {
-    return <SignIn onSignIn={() => setAppState('app')} />;
+    return (
+      <SignIn
+        onSignIn={(email) => {
+          if (email) setUserEmail(email);
+          setAppState('post-signin-loader');
+        }}
+      />
+    );
+  }
+
+  if (appState === 'post-signin-loader') {
+    return (
+      <IconLoader
+        userEmail={userEmail}
+        onComplete={() => setAppState('app')}
+      />
+    );
   }
 
   return (
@@ -104,6 +113,9 @@ export default function App() {
             onNavigateToSection={setCurrentSection}
             prefillCompose={prefillCompose}
             onClearPrefillCompose={() => setPrefillCompose(null)}
+            autoRepliesEnabled={settings.autoRepliesEnabled}
+            onDisableAutoReplies={() => setSettings(prev => ({ ...prev, autoRepliesEnabled: false }))}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
         )}
         {currentSection === 'calendar' && (

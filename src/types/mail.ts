@@ -21,6 +21,16 @@ export interface FolderItem {
 
 export type EmailTab = 'focused' | 'other';
 
+export interface MeetingInviteDetails {
+  title: string;
+  start: string;
+  end: string;
+  location?: string;
+  isTeams?: boolean;
+  status?: 'accepted' | 'tentative' | 'declined' | 'pending';
+  organizer?: { name: string; email: string };
+}
+
 export interface EmailAttachment {
   id: string;
   name: string;
@@ -54,6 +64,8 @@ export interface EmailMessage {
   hasAttachments?: boolean;
   attachments?: EmailAttachment[];
   importance?: 'low' | 'normal' | 'high';
+  meetingInvite?: MeetingInviteDetails;
+  snoozedUntil?: string;
 }
 
 export type SortField = 'date' | 'from' | 'subject' | 'importance';

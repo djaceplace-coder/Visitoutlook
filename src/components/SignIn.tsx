@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowLeft, KeyRound, Fingerprint, ShieldCheck, Smartphone, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SignInProps {
-  onSignIn: () => void;
+  onSignIn: (email?: string) => void;
 }
 
 type SignInStep = 'identifier' | 'password';
@@ -48,7 +48,8 @@ export function SignIn({ onSignIn }: SignInProps) {
      * - Backend REST /api/auth/login endpoint session exchange
      * -------------------------------------------------------------
      */
-    onSignIn();
+    const userIdentifier = identifier.trim() || 'alex.bennett@outlook.com';
+    onSignIn(userIdentifier);
   };
 
   const handleBackToIdentifier = () => {

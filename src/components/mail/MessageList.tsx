@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Layers,
   Search,
+  Calendar as CalendarIcon,
   X
 } from 'lucide-react';
 import {
@@ -414,6 +415,12 @@ export function MessageList({
 
             {/* Subject row */}
             <div className="flex items-center gap-1.5 text-xs mb-0.5 truncate">
+              {msg.meetingInvite && (
+                <span className="inline-flex items-center text-[#0078D4] flex-shrink-0" title="Meeting invitation">
+                  <CalendarIcon size={12} />
+                </span>
+              )}
+
               <span
                 className={`truncate ${
                   !msg.read ? 'font-semibold text-gray-900' : 'text-gray-800'
@@ -425,6 +432,27 @@ export function MessageList({
               {/* Attachment Clip */}
               {msg.hasAttachments && (
                 <Paperclip size={12} className="text-gray-400 flex-shrink-0" />
+              )}
+
+              {/* Category Badge */}
+              {msg.category && (
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.2 text-[9px] font-semibold border flex-shrink-0 ${
+                    msg.category.toLowerCase().includes('green')
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : msg.category.toLowerCase().includes('purple')
+                      ? 'bg-purple-50 text-purple-800 border-purple-300'
+                      : msg.category.toLowerCase().includes('orange')
+                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                      : msg.category.toLowerCase().includes('red')
+                      ? 'bg-rose-50 text-rose-800 border-rose-300'
+                      : msg.category.toLowerCase().includes('yellow')
+                      ? 'bg-yellow-50 text-yellow-800 border-yellow-300'
+                      : 'bg-blue-50 text-blue-800 border-blue-300'
+                  }`}
+                >
+                  {msg.category}
+                </span>
               )}
             </div>
 

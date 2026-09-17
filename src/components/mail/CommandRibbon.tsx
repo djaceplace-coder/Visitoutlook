@@ -40,7 +40,9 @@ import {
   FileText,
   CheckCircle2,
   Settings,
-  HardDrive
+  HardDrive,
+  Tag,
+  Zap
 } from 'lucide-react';
 import { RibbonTab, Density, ReadingPanePosition } from '../../types/mail';
 
@@ -78,6 +80,10 @@ interface CommandRibbonProps {
   onOpenWhatsNew?: () => void;
   onOpenSupport?: () => void;
   onToggleFolderPane?: () => void;
+  onCategorize?: (category: string) => void;
+  onSnooze?: (timeTitle: string) => void;
+  onQuickStep?: (stepId: 'done' | 'team_review' | 'follow_up') => void;
+  onNavigateToSection?: (section: 'inbox' | 'calendar' | 'people' | 'tasks' | 'apps') => void;
 }
 
 export function CommandRibbon({
@@ -113,7 +119,11 @@ export function CommandRibbon({
   onOpenWhatsNew,
   onOpenSupport,
   onToggleFolderPane,
-  onUndo
+  onUndo,
+  onCategorize,
+  onSnooze,
+  onQuickStep,
+  onNavigateToSection
 }: CommandRibbonProps) {
   // Dropdown states for split buttons
   const [openSplit, setOpenSplit] = useState<string | null>(null);
@@ -278,7 +288,7 @@ export function CommandRibbon({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setOpenSplit(null); alert('Create new Outlook Group dialogue'); }}
+                      onClick={() => { setOpenSplit(null); setIsGroupsOpen(true); }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F3F4F6] text-left text-[#242424] transition-colors"
                     >
                       <Users size={15} className="text-[#6264A7]" />
@@ -292,7 +302,7 @@ export function CommandRibbon({
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setOpenSplit(null); alert('Creating new Word document in OneDrive'); }}
+                      onClick={() => { setOpenSplit(null); onNavigateToSection?.('apps'); }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-[#F3F4F6] text-left text-[#242424] transition-colors"
                     >
                       <div className="w-4 h-4 rounded bg-[#185ABD] text-white flex items-center justify-center font-bold text-[9px]">W</div>
@@ -300,7 +310,7 @@ export function CommandRibbon({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setOpenSplit(null); alert('Creating new Excel spreadsheet in OneDrive'); }}
+                      onClick={() => { setOpenSplit(null); onNavigateToSection?.('apps'); }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-[#F3F4F6] text-left text-[#242424] transition-colors"
                     >
                       <div className="w-4 h-4 rounded bg-[#107C41] text-white flex items-center justify-center font-bold text-[9px]">X</div>
@@ -308,7 +318,7 @@ export function CommandRibbon({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setOpenSplit(null); alert('Creating new PowerPoint presentation in OneDrive'); }}
+                      onClick={() => { setOpenSplit(null); onNavigateToSection?.('apps'); }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-[#F3F4F6] text-left text-[#242424] transition-colors"
                     >
                       <div className="w-4 h-4 rounded bg-[#C43E1C] text-white flex items-center justify-center font-bold text-[9px]">P</div>
@@ -550,6 +560,138 @@ export function CommandRibbon({
                 <Flag size={14} className={isFlagged ? 'text-brand-terracotta fill-brand-terracotta' : hasSelection ? 'text-gray-700' : 'text-gray-400'} />
                 <span>Flag / Unflag</span>
               </button>
+
+              {/* Categorize (with split dropdown) */}
+              <div className="relative inline-flex items-center">
+                <button
+                  type="button"
+                  disabled={!hasSelection}
+                  onClick={() => toggleSplit('categorize')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-full transition-colors"
+                  title="Assign color category"
+                >
+                  <Tag size={14} className={hasSelection ? 'text-emerald-600' : 'text-gray-400'} />
+                  <span>Categorize</span>
+                  <ChevronDown size={11} className="text-gray-400" />
+                </button>
+
+                {openSplit === 'categorize' && hasSelection && (
+                  <div className="absolute left-0 top-[calc(100%+4px)] w-48 bg-white border border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-50 py-1.5 text-xs rounded-md ring-1 ring-black/5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3.5 py-1 font-semibold text-[10px] text-gray-400 uppercase tracking-wider">
+                      Categories
+                    </div>
+                    {[
+                      { name: 'Blue', color: 'bg-blue-500' },
+                      { name: 'Green', color: 'bg-emerald-500' },
+                      { name: 'Orange', color: 'bg-amber-500' },
+                      { name: 'Purple', color: 'bg-purple-500' },
+                      { name: 'Red', color: 'bg-rose-500' },
+                      { name: 'Yellow', color: 'bg-yellow-500' }
+                    ].map((cat) => (
+                      <button
+                        key={cat.name}
+                        type="button"
+                        onClick={() => {
+                          setOpenSplit(null);
+                          onCategorize?.(cat.name);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F3F4F6] text-left text-[#242424] transition-colors"
+                      >
+                        <span className={`w-3 h-3 rounded-xs ${cat.color}`} />
+                        <span>{cat.name} category</span>
+                      </button>
+                    ))}
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSplit(null);
+                        onCategorize?.('');
+                      }}
+                      className="w-full flex items-center px-3.5 py-1.5 hover:bg-[#F3F4F6] text-left text-gray-500 transition-colors"
+                    >
+                      Clear all categories
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Snooze button */}
+              <button
+                type="button"
+                disabled={!hasSelection}
+                onClick={() => setIsSnoozeModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-full transition-colors"
+                title="Snooze message until later"
+              >
+                <Clock size={14} className={hasSelection ? 'text-brand-cobalt' : 'text-gray-400'} />
+                <span>Snooze</span>
+              </button>
+
+              {/* Quick Steps (with split dropdown) */}
+              <div className="relative inline-flex items-center">
+                <button
+                  type="button"
+                  disabled={!hasSelection}
+                  onClick={() => toggleSplit('quicksteps')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent rounded-full transition-colors"
+                  title="Run Quick Step automation"
+                >
+                  <Zap size={14} className={hasSelection ? 'text-amber-500' : 'text-gray-400'} />
+                  <span>Quick Steps</span>
+                  <ChevronDown size={11} className="text-gray-400" />
+                </button>
+
+                {openSplit === 'quicksteps' && hasSelection && (
+                  <div className="absolute left-0 top-[calc(100%+4px)] w-56 bg-white border border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-50 py-1.5 text-xs rounded-md ring-1 ring-black/5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3.5 py-1 font-semibold text-[10px] text-gray-400 uppercase tracking-wider">
+                      Quick Steps
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSplit(null);
+                        onQuickStep?.('done');
+                      }}
+                      className="w-full flex items-center gap-2 px-3.5 py-2 hover:bg-[#F3F4F6] text-left text-gray-800 transition-colors"
+                    >
+                      <Check size={14} className="text-emerald-600" />
+                      <div>
+                        <div className="font-semibold text-xs">Done</div>
+                        <div className="text-[10px] text-gray-500">Mark read &amp; move to Archive</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSplit(null);
+                        onQuickStep?.('follow_up');
+                      }}
+                      className="w-full flex items-center gap-2 px-3.5 py-2 hover:bg-[#F3F4F6] text-left text-gray-800 transition-colors"
+                    >
+                      <Flag size={14} className="text-amber-600" />
+                      <div>
+                        <div className="font-semibold text-xs">Follow-up</div>
+                        <div className="text-[10px] text-gray-500">Flag with Orange category</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSplit(null);
+                        onQuickStep?.('team_review');
+                      }}
+                      className="w-full flex items-center gap-2 px-3.5 py-2 hover:bg-[#F3F4F6] text-left text-gray-800 transition-colors"
+                    >
+                      <Forward size={14} className="text-blue-600" />
+                      <div>
+                        <div className="font-semibold text-xs">Team Review</div>
+                        <div className="text-[10px] text-gray-500">Forward thread to team</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <div className="h-4 w-px bg-gray-200 mx-1" />
 
@@ -1140,7 +1282,10 @@ X-MS-Exchange-Organization-AuthAs: Internal`}
                 <button
                   key={slot.title}
                   type="button"
-                  onClick={() => setIsSnoozeModalOpen(false)}
+                  onClick={() => {
+                    setIsSnoozeModalOpen(false);
+                    onSnooze?.(slot.title);
+                  }}
                   className="w-full flex items-center justify-between py-2.5 px-2 hover:bg-gray-100 text-left transition-colors"
                 >
                   <span className="font-medium text-gray-800">{slot.title}</span>
