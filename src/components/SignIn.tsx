@@ -54,52 +54,117 @@ export function SignIn({ onSignIn }: SignInProps) {
     // If Supabase is configured, attempt authentication with graceful fallback
     if (isSupabaseConfigured && supabase) {
       try {
-        if (authMode === 'signup') {
-          const { data, error } = await supabase.auth.signUp({
-            email: userEmail,
-            password: password,
-          });
+        // 1. Check if the account is already present on the public.users table
+        let isAccountOnTable = false;
+        try {
+          const { data: userRow } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('email', userEmail)
+            .maybeSingle();
 
-          if (error) {
-            // If already registered or signup fails, attempt direct sign in or continue
-            const signInRes = await supabase.auth.signInWithPassword({
-              email: userEmail,
-              password: password,
-            });
-            if (signInRes.data?.user) {
-              setIsLoading(false);
-              onSignIn(signInRes.data.user.email || userEmail);
-              return;
-            }
-          } else if (data.user) {
-            setIsLoading(false);
-            onSignIn(data.user.email || userEmail);
-            return;
+          if (userRow) {
+            isAccountOnTable = true;
           }
-        } else {
-          // signInWithPassword
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: userEmail,
-            password: password,
-          });
-
-          if (!error && data?.user) {
-            setIsLoading(false);
-            onSignIn(data.user.email || userEmail);
-            return;
-          }
-
-          // If account doesn't exist, automatically create and save account
-          const signUpRes = await supabase.auth.signUp({
-            email: userEmail,
-            password: password,
-          });
-          if (signUpRes.data?.user) {
-            setIsLoading(false);
-            onSignIn(signUpRes.data.user.email || userEmail);
-            return;
-          }
+        } catch (tableErr) {
+          console.warn('users table check notice:', tableErr);
         }
+
+        // Case A: Account is already on the table -> Sign in directly; do not sign up again
+        if (isAccountOnTable) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: password,
+          });
+
+          if (!signInError && signInData?.user) {
+            // Update last_sign_in_at on the users table
+            try {
+              await supabase
+                .from('users')
+                .update({ last_sign_in_at: new Date().toISOString() })
+                .eq('email', userEmail);
+            } catch (updateErr) {
+              console.warn('Could not update last_sign_in_at:', updateErr);
+            }
+
+            setIsLoading(false);
+            onSignIn(signInData.user.email || userEmail);
+            return;
+          }
+
+          // If password was incorrect for existing user on the table
+          setIsLoading(false);
+          setErrorMessage(signInError?.message || 'Incorrect password for this account. Please try again.');
+          return;
+        }
+
+        // Case B: Account is not on the public.users table yet.
+        // Check if it already exists in auth.users (e.g. created earlier)
+        const { data: authSignIn, error: authSignInErr } = await supabase.auth.signInWithPassword({
+          email: userEmail,
+          password: password,
+        });
+
+        if (!authSignInErr && authSignIn?.user) {
+          // Account exists in auth.users! Sync to public.users table now so it appears in Table Editor
+          try {
+            await supabase.from('users').upsert({
+              id: authSignIn.user.id,
+              email: userEmail,
+              display_name: userEmail.split('@')[0],
+              last_sign_in_at: new Date().toISOString(),
+            }, { onConflict: 'email' });
+          } catch (syncErr) {
+            console.warn('Could not sync existing account to users table:', syncErr);
+          }
+
+          setIsLoading(false);
+          onSignIn(authSignIn.user.email || userEmail);
+          return;
+        }
+
+        // Case C: Account is neither in public.users nor in auth.users.
+        // Automatically register all new sign-ins as signups!
+        if (password.length < 6) {
+          setIsLoading(false);
+          setErrorMessage('Password must be at least 6 characters for a new account.');
+          return;
+        }
+
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: userEmail,
+          password: password,
+        });
+
+        if (signUpError) {
+          // If already registered in auth but password was incorrect:
+          if (signUpError.message?.toLowerCase().includes('already registered')) {
+            setIsLoading(false);
+            setErrorMessage('This account is already registered. Please check your password.');
+            return;
+          }
+          console.warn('Supabase signUp warning:', signUpError.message);
+        }
+
+        const newUserId = signUpData?.user?.id;
+
+        // Record into public.users table so it is immediately visible in Supabase Table Editor
+        try {
+          await supabase.from('users').upsert({
+            id: newUserId || undefined,
+            email: userEmail,
+            display_name: userEmail.split('@')[0],
+            created_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+        } catch (upsertErr) {
+          console.warn('Could not write new account to users table:', upsertErr);
+        }
+
+        setIsLoading(false);
+        onSignIn(signUpData?.user?.email || userEmail);
+        return;
       } catch (err) {
         console.warn('Authentication attempt continuing to workspace:', err);
       }

@@ -6,6 +6,16 @@
 -- Enable UUID extension if not enabled
 create extension if not exists "pgcrypto";
 
+-- 0. Users (Public accounts table visible directly in Supabase Table Editor)
+create table if not exists public.users (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  display_name text,
+  avatar_url text,
+  created_at timestamptz default now(),
+  last_sign_in_at timestamptz default now()
+);
+
 -- 1. Folders (Mail folders: Inbox, Sent Items, Drafts, Archive, Deleted Items, Junk, custom)
 create table if not exists folders (
   id uuid primary key default gen_random_uuid(),
@@ -148,6 +158,7 @@ create table if not exists user_settings (
 -- ROW LEVEL SECURITY (RLS) ACTIVATION
 -- ============================================================================
 
+alter table public.users enable row level security;
 alter table folders enable row level security;
 alter table messages enable row level security;
 alter table drafts enable row level security;
@@ -161,6 +172,17 @@ alter table user_settings enable row level security;
 -- ============================================================================
 -- RLS POLICIES (Users can only view, insert, update, delete their own data)
 -- ============================================================================
+
+-- users
+drop policy if exists "Allow public select on users" on public.users;
+drop policy if exists "Allow public insert on users" on public.users;
+drop policy if exists "Allow public update on users" on public.users;
+drop policy if exists "Allow delete own record on users" on public.users;
+
+create policy "Allow public select on users" on public.users for select using (true);
+create policy "Allow public insert on users" on public.users for insert with check (true);
+create policy "Allow public update on users" on public.users for update using (true) with check (true);
+create policy "Allow delete own record on users" on public.users for delete using (auth.uid() = id);
 
 -- folders
 drop policy if exists "Users can view own folders" on folders;
@@ -273,12 +295,25 @@ create index if not exists idx_tasks_completed on tasks(user_id, is_completed);
 
 -- ============================================================================
 -- AUTOMATIC NEW USER INITIALIZATION (Trigger on auth.users sign-up)
--- Creates default folders and settings whenever a user registers
+-- Creates default folders, user profile row, and settings whenever a user registers
 -- ============================================================================
 create or replace function public.handle_new_user_setup()
 returns trigger as $$
 begin
-  -- Initialize Default Folders
+  -- 0. Insert or sync into public.users table so it is visible in the Supabase Table Editor
+  insert into public.users (id, email, display_name, created_at, last_sign_in_at)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    coalesce(new.created_at, now()),
+    now()
+  )
+  on conflict (email) do update set
+    id = excluded.id,
+    last_sign_in_at = now();
+
+  -- 1. Initialize Default Folders
   insert into public.folders (user_id, name, icon)
   values 
     (new.id, 'Inbox', 'Inbox'),
@@ -289,17 +324,17 @@ begin
     (new.id, 'Junk Email', 'AlertOctagon')
   on conflict do nothing;
 
-  -- Initialize User Settings
+  -- 2. Initialize User Settings
   insert into public.user_settings (user_id, theme, density, reading_pane_position)
   values (new.id, 'light', 'comfortable', 'right')
   on conflict do nothing;
 
-  -- Initialize Default Calendar
+  -- 3. Initialize Default Calendar
   insert into public.calendars (user_id, name, color)
   values (new.id, 'Calendar', '#0078D4')
   on conflict do nothing;
 
-  -- Initialize Default To-Do List
+  -- 4. Initialize Default To-Do List
   insert into public.task_lists (user_id, name, color)
   values (new.id, 'Tasks', '#0078D4')
   on conflict do nothing;
@@ -313,6 +348,23 @@ drop trigger if exists on_auth_user_created_setup on auth.users;
 create trigger on_auth_user_created_setup
   after insert on auth.users
   for each row execute function public.handle_new_user_setup();
+
+-- ============================================================================
+-- SYNC EXISTING ACCOUNTS INTO public.users TABLE
+-- (Populates all existing auth.users into public.users immediately upon running this script)
+-- ============================================================================
+insert into public.users (id, email, display_name, created_at, last_sign_in_at)
+select 
+  id, 
+  email, 
+  coalesce(raw_user_meta_data->>'name', split_part(email, '@', 1)),
+  coalesce(created_at, now()),
+  coalesce(last_sign_in_at, now())
+from auth.users
+where email is not null
+on conflict (email) do update set
+  id = excluded.id,
+  last_sign_in_at = excluded.last_sign_in_at;
 
 -- ============================================================================
 -- BACKEND PASSWORD MANAGEMENT FROM SUPABASE
