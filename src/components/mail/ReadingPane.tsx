@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
+  ArrowLeft,
   Reply,
   ReplyAll,
   Forward,
@@ -44,6 +45,7 @@ import {
 import { EmailMessage, EmailAttachment } from '../../types/mail';
 import { EmptyInboxGraphic } from './EmptyInboxGraphic';
 import { OutlookMobileQrGraphic } from './OutlookMobileQrGraphic';
+import { getCategoryBadgeStyle } from '../../lib/mailCategoryHelper';
 
 interface ReadingPaneProps {
   message: EmailMessage | null;
@@ -73,6 +75,7 @@ interface ReadingPaneProps {
   onSnooze?: (timeTitle: string) => void;
   onQuickStep?: (stepId: 'done' | 'team_review' | 'follow_up') => void;
   onUpdateMeetingStatus?: (msgId: string, status: 'accepted' | 'tentative' | 'declined') => void;
+  onBack?: () => void;
 }
 
 export function ReadingPane({
@@ -92,7 +95,8 @@ export function ReadingPane({
   onCategorize,
   onSnooze,
   onQuickStep,
-  onUpdateMeetingStatus
+  onUpdateMeetingStatus,
+  onBack
 }: ReadingPaneProps) {
   // Category & Quick Action Popovers
   const [isCategorizeOpen, setIsCategorizeOpen] = useState(false);
@@ -247,12 +251,23 @@ export function ReadingPane({
       className="flex-1 flex flex-col bg-white min-w-0 overflow-hidden"
     >
       {/* 1. Header Action & Subject Bar */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white flex-shrink-0">
-        <div className="flex items-start justify-between gap-4 mb-3">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-white flex-shrink-0">
+        <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3">
           {/* Subject Title & Flags */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold text-[#1F2937] tracking-tight leading-snug">
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="md:hidden p-1.5 -ml-1.5 text-gray-700 hover:text-brand-cobalt hover:bg-gray-100 rounded transition-colors"
+                  title="Back to messages"
+                  aria-label="Back to messages"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+              )}
+              <h1 className="text-base sm:text-xl font-bold text-[#1F2937] tracking-tight leading-snug">
                 {message.subject}
               </h1>
 
@@ -275,19 +290,9 @@ export function ReadingPane({
               {/* Category pill */}
               {message.category && (
                 <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold border ${
-                    message.category.toLowerCase().includes('green')
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : message.category.toLowerCase().includes('purple')
-                      ? 'bg-purple-50 text-purple-800 border-purple-300'
-                      : message.category.toLowerCase().includes('orange')
-                      ? 'bg-amber-50 text-amber-800 border-amber-300'
-                      : message.category.toLowerCase().includes('red')
-                      ? 'bg-rose-50 text-rose-800 border-rose-300'
-                      : message.category.toLowerCase().includes('yellow')
-                      ? 'bg-yellow-50 text-yellow-800 border-yellow-300'
-                      : 'bg-blue-50 text-blue-800 border-blue-300'
-                  }`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold border ${getCategoryBadgeStyle(
+                    message.category
+                  )}`}
                 >
                   <Tag size={11} />
                   {message.category}

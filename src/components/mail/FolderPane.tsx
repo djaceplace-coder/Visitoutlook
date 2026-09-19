@@ -249,7 +249,13 @@ export function FolderPane({
           onDragOver={(e) => handleDragOver(folder.id, e)}
           onDragLeave={(e) => handleDragLeave(folder.id, e)}
           onDrop={(e) => handleDrop(folder.id, e)}
-          onClick={() => onSelectFolder(folder.id)}
+          onClick={() => {
+            onSelectFolder(folder.id);
+            // On small mobile screens, close drawer upon selecting a folder
+            if (window.innerWidth < 768) {
+              onToggleOpen();
+            }
+          }}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
           className={`group flex items-center justify-between py-1.5 pr-2 text-xs cursor-pointer border-l-2 transition-colors rounded-none ${
             isDragOver
@@ -408,11 +414,19 @@ export function FolderPane({
   if (!isOpen) return null;
 
   return (
-    <aside
-      id="outlook-folder-pane"
-      aria-label="Mail Folders"
-      className="w-60 bg-[#F5F7F9] border-r border-gray-200 flex flex-col flex-shrink-0 select-none overflow-hidden relative"
-    >
+    <>
+      {/* Mobile backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/40 z-40 md:hidden animate-in fade-in duration-200" 
+        onClick={onToggleOpen}
+        aria-hidden="true"
+      />
+
+      <aside
+        id="outlook-folder-pane"
+        aria-label="Mail Folders"
+        className="fixed md:static inset-y-0 left-0 z-50 md:z-auto w-64 md:w-60 bg-[#F5F7F9] border-r border-gray-200 flex flex-col flex-shrink-0 select-none overflow-hidden shadow-xl md:shadow-none transition-transform duration-200"
+      >
       {/* 1. Account Header Row with Collapse Chevron */}
       <div className="border-b border-gray-200 bg-white flex-shrink-0">
         <div
@@ -486,7 +500,12 @@ export function FolderPane({
                     onDragOver={(e) => handleDragOver(`fav-${folder.id}`, e)}
                     onDragLeave={(e) => handleDragLeave(`fav-${folder.id}`, e)}
                     onDrop={(e) => handleDrop(folder.id, e)}
-                    onClick={() => onSelectFolder(folder.id)}
+                    onClick={() => {
+                      onSelectFolder(folder.id);
+                      if (window.innerWidth < 768) {
+                        onToggleOpen();
+                      }
+                    }}
                     className={`group flex items-center justify-between px-2.5 py-1.5 text-xs cursor-pointer border-l-2 transition-colors ${
                       isDragOver
                         ? 'bg-[#CCE8FF] text-brand-cobalt border-brand-cobalt font-semibold outline outline-1 outline-brand-cobalt'
@@ -690,5 +709,6 @@ export function FolderPane({
         </div>
       )}
     </aside>
+    </>
   );
 }

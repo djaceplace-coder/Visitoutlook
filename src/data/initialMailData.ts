@@ -64,7 +64,8 @@ The Outlook Product Team`,
     read: false,
     flagged: true,
     pinned: true,
-    importance: 'high'
+    importance: 'high',
+    category: 'Blue'
   },
   {
     id: 'msg-2',
@@ -125,7 +126,8 @@ Marcus`,
     date: '8:48 AM',
     timestamp: Date.now() - 1000 * 60 * 150,
     read: true,
-    flagged: false
+    flagged: false,
+    category: 'Yellow'
   },
   {
     id: 'msg-4',
@@ -177,7 +179,8 @@ David`,
     date: 'Sep 14',
     timestamp: Date.now() - 1000 * 60 * 60 * 48,
     read: true,
-    flagged: false
+    flagged: false,
+    category: 'Orange'
   },
   {
     id: 'msg-6',
@@ -199,7 +202,8 @@ View PR on GitHub: https://github.com/organization/outlook-client/pull/148`,
     date: 'Sep 15',
     timestamp: Date.now() - 1000 * 60 * 60 * 30,
     read: true,
-    flagged: false
+    flagged: false,
+    category: 'Teal'
   },
   {
     id: 'msg-7',
@@ -221,7 +225,8 @@ Read the full dispatch online.`,
     date: 'Sep 13',
     timestamp: Date.now() - 1000 * 60 * 60 * 72,
     read: true,
-    flagged: false
+    flagged: false,
+    category: 'News'
   },
   {
     id: 'msg-8',
@@ -242,6 +247,7 @@ Receipt and breakdown can be downloaded from your customer portal.`,
     timestamp: Date.now() - 1000 * 60 * 60 * 96,
     read: true,
     flagged: false,
+    category: 'Billing',
     hasAttachments: true,
     attachments: [
       { id: 'att-5', name: 'Invoice_INV-2026-09.pdf', size: '115 KB', type: 'pdf' }
@@ -401,6 +407,7 @@ Danielle`,
     timestamp: Date.now() - 1000 * 60 * 60 * 12,
     read: false,
     flagged: true,
+    category: 'Green',
     hasAttachments: true,
     attachments: [
       { id: 'att-7', name: 'Q4_Launch_Checklist.pdf', size: '320 KB', type: 'pdf' }
@@ -425,7 +432,8 @@ Elena`,
     date: 'Sep 14',
     timestamp: Date.now() - 1000 * 60 * 60 * 36,
     read: false,
-    flagged: false
+    flagged: false,
+    category: 'Purple'
   },
   {
     id: 'msg-18',

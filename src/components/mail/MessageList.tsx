@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
+  Menu,
   Filter,
   ArrowUpDown,
   CheckSquare,
@@ -32,6 +33,7 @@ import {
 } from '../../types/mail';
 import { AdvancedSearchFilters } from './AdvancedSearchModal';
 import { EmptyInboxGraphic } from './EmptyInboxGraphic';
+import { getCategoryBadgeStyle } from '../../lib/mailCategoryHelper';
 
 interface MessageListProps {
   messages: EmailMessage[];
@@ -59,6 +61,7 @@ interface MessageListProps {
   advancedFilters?: AdvancedSearchFilters | null;
   onClearAdvancedFilters?: () => void;
   enableFocusedInbox?: boolean;
+  onOpenFolderPane?: () => void;
 }
 
 export function MessageList({
@@ -87,6 +90,7 @@ export function MessageList({
   advancedFilters,
   onClearAdvancedFilters,
   enableFocusedInbox = true,
+  onOpenFolderPane,
 }: MessageListProps) {
   // Sort and Filter States
   const [sortField, setSortField] = useState<SortField>('date');
@@ -437,19 +441,9 @@ export function MessageList({
               {/* Category Badge */}
               {msg.category && (
                 <span
-                  className={`inline-flex items-center px-1.5 py-0.2 text-[9px] font-semibold border flex-shrink-0 ${
-                    msg.category.toLowerCase().includes('green')
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : msg.category.toLowerCase().includes('purple')
-                      ? 'bg-purple-50 text-purple-800 border-purple-300'
-                      : msg.category.toLowerCase().includes('orange')
-                      ? 'bg-amber-50 text-amber-800 border-amber-300'
-                      : msg.category.toLowerCase().includes('red')
-                      ? 'bg-rose-50 text-rose-800 border-rose-300'
-                      : msg.category.toLowerCase().includes('yellow')
-                      ? 'bg-yellow-50 text-yellow-800 border-yellow-300'
-                      : 'bg-blue-50 text-blue-800 border-blue-300'
-                  }`}
+                  className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold border flex-shrink-0 ${getCategoryBadgeStyle(
+                    msg.category
+                  )}`}
                 >
                   {msg.category}
                 </span>
@@ -545,7 +539,7 @@ export function MessageList({
           ? 'w-full'
           : readingPanePosition === 'bottom'
             ? 'h-1/2 w-full border-b border-gray-200'
-            : 'w-80 lg:w-96 border-r border-gray-200'
+            : 'w-full md:w-80 lg:w-96 border-r border-gray-200'
       } flex flex-col flex-shrink-0 bg-white min-w-0 overflow-hidden outline-none select-none`}
     >
       {/* 1. Header Toolbar: Tabs or Folder Title + Multi-Select Actions + Filter/Sort */}
@@ -647,53 +641,66 @@ export function MessageList({
           /* Normal Header Row */
           <div className="px-3 pt-2">
             <div className="flex items-center justify-between mb-1.5">
-              {/* Left: Focused / Other Tabs (if Inbox and enabled) or Folder Name */}
-              {activeFolderId === 'inbox' && enableFocusedInbox ? (
-                <div className="flex items-center gap-4">
+              {/* Left: Optional mobile folder toggle + Focused/Other Tabs or Folder Name */}
+              <div className="flex items-center gap-2">
+                {onOpenFolderPane && (
                   <button
                     type="button"
-                    onClick={() => onTabChange('focused')}
-                    className={`pb-1.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
-                      activeTab === 'focused'
-                        ? 'border-brand-cobalt text-brand-cobalt'
-                        : 'border-transparent text-gray-500 hover:text-gray-900'
-                    }`}
+                    onClick={onOpenFolderPane}
+                    className="md:hidden p-1 -ml-1 text-gray-600 hover:text-brand-cobalt hover:bg-gray-100 rounded transition-colors"
+                    title="Open Folders"
+                    aria-label="Open Folders"
                   >
-                    <span>Focused</span>
-                    {focusedUnread > 0 && (
-                      <span className="text-[10px] px-1 bg-brand-ice text-brand-cobalt font-bold rounded-sm">
-                        {focusedUnread}
-                      </span>
-                    )}
+                    <Menu size={16} />
                   </button>
+                )}
+                {activeFolderId === 'inbox' && enableFocusedInbox ? (
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => onTabChange('focused')}
+                      className={`pb-1.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
+                        activeTab === 'focused'
+                          ? 'border-brand-cobalt text-brand-cobalt'
+                          : 'border-transparent text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      <span>Focused</span>
+                      {focusedUnread > 0 && (
+                        <span className="text-[10px] px-1 bg-brand-ice text-brand-cobalt font-bold rounded-sm">
+                          {focusedUnread}
+                        </span>
+                      )}
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onTabChange('other')}
-                    className={`pb-1.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
-                      activeTab === 'other'
-                        ? 'border-brand-cobalt text-brand-cobalt'
-                        : 'border-transparent text-gray-500 hover:text-gray-900'
-                    }`}
-                  >
-                    <span>Other</span>
-                    {otherUnread > 0 && (
-                      <span className="text-[10px] px-1 bg-gray-200 text-gray-700 font-bold rounded-sm">
-                        {otherUnread}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    {activeFolderName}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    ({processedMessages.length})
-                  </span>
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => onTabChange('other')}
+                      className={`pb-1.5 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
+                        activeTab === 'other'
+                          ? 'border-brand-cobalt text-brand-cobalt'
+                          : 'border-transparent text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      <span>Other</span>
+                      {otherUnread > 0 && (
+                        <span className="text-[10px] px-1 bg-gray-200 text-gray-700 font-bold rounded-sm">
+                          {otherUnread}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                      {activeFolderName}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      ({processedMessages.length})
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {/* Right: Filter & Sort Controls */}
               <div className="flex items-center gap-1">

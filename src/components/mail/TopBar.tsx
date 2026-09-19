@@ -12,12 +12,10 @@ import {
   LayoutGrid,
   Gem,
   Check,
-  ExternalLink,
-  ShieldCheck,
-  Cloud,
   Award,
   Sparkles
 } from 'lucide-react';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface TopBarProps {
   onToggleFolderPane: () => void;
@@ -28,6 +26,7 @@ interface TopBarProps {
   onNavigate?: (section: 'inbox' | 'calendar' | 'people' | 'tasks' | 'apps') => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  userEmail?: string;
 }
 
 export function TopBar({
@@ -37,6 +36,7 @@ export function TopBar({
   onNavigate,
   searchQuery,
   onSearchChange,
+  userEmail = 'alex.bennett@outlook.com',
 }: TopBarProps) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -98,6 +98,8 @@ export function TopBar({
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const displayName = userEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Outlook User';
+
   return (
     <header className="h-12 bg-brand-cobalt text-white flex items-center justify-between px-3 z-30 select-none flex-shrink-0">
       {/* Left cluster: 9-Dot App Launcher (Waffle) + "Outlook" Text */}
@@ -106,7 +108,7 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setIsAppLauncherOpen(!isAppLauncherOpen)}
-            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded-sm transition-colors"
+            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded-sm transition-colors cursor-pointer"
             title="Microsoft 365 app launcher"
             aria-label="Microsoft 365 app launcher"
           >
@@ -139,7 +141,7 @@ export function TopBar({
                       }
                       setIsAppLauncherOpen(false);
                     }}
-                    className="p-2 hover:bg-gray-50 rounded flex flex-col items-center gap-1 text-gray-800"
+                    className="p-2 hover:bg-gray-50 rounded flex flex-col items-center gap-1 text-gray-800 cursor-pointer"
                   >
                     <div className={`w-8 h-8 rounded-sm ${app.color} flex items-center justify-center font-bold text-xs shadow-xs`}>
                       {app.icon}
@@ -175,7 +177,7 @@ export function TopBar({
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              className="absolute right-8 text-gray-400 hover:text-gray-600 p-1"
+              className="absolute right-8 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
               title="Clear search"
             >
               <X size={14} />
@@ -184,7 +186,7 @@ export function TopBar({
           <button
             type="button"
             onClick={onOpenAdvancedSearch}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-brand-cobalt transition-colors"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-brand-cobalt transition-colors cursor-pointer"
             title="Open advanced filter options"
           >
             <SlidersHorizontal size={14} />
@@ -199,7 +201,7 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setIsRewardsOpen(!isRewardsOpen)}
-            className="hidden md:flex items-center gap-1 px-2 py-1 text-xs text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors"
+            className="hidden md:flex items-center gap-1 px-2 py-1 text-xs text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
             title="Microsoft Rewards points"
           >
             <span className="font-semibold">219</span>
@@ -216,7 +218,7 @@ export function TopBar({
                 <button
                   type="button"
                   onClick={() => setIsRewardsOpen(false)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
                 >
                   <X size={14} />
                 </button>
@@ -259,7 +261,7 @@ export function TopBar({
         <button
           type="button"
           onClick={() => setIsBuy365Open(true)}
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs text-white hover:bg-white/10 rounded transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
           title="Buy Microsoft 365"
         >
           <Gem size={14} className="text-white" />
@@ -271,7 +273,7 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors relative"
+            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors relative cursor-pointer"
             title="Notifications"
           >
             <Bell size={17} />
@@ -288,14 +290,14 @@ export function TopBar({
                   <button
                     type="button"
                     onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
-                    className="text-xs text-brand-cobalt hover:underline"
+                    className="text-xs text-brand-cobalt hover:underline cursor-pointer"
                   >
                     Mark all read
                   </button>
                   <button
                     type="button"
                     onClick={() => setNotifications([])}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
                   >
                     Clear
                   </button>
@@ -330,7 +332,7 @@ export function TopBar({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors"
+          className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
           title="Settings"
         >
           <Settings size={17} />
@@ -341,7 +343,7 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setIsOverflowOpen(!isOverflowOpen)}
-            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors"
+            className="p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
             title="More actions"
           >
             <MoreHorizontal size={17} />
@@ -358,7 +360,7 @@ export function TopBar({
                     ...prev
                   ]);
                 }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-xs text-gray-700 transition-colors"
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-xs text-gray-700 transition-colors cursor-pointer"
               >
                 Check for new messages
               </button>
@@ -367,7 +369,7 @@ export function TopBar({
                 onClick={() => {
                   setIsOverflowOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-xs text-gray-700 transition-colors"
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-xs text-gray-700 transition-colors cursor-pointer"
               >
                 Offline cache settings
               </button>
@@ -380,8 +382,8 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-            className="w-7 h-7 rounded-full bg-white text-brand-cobalt flex items-center justify-center hover:opacity-90 transition-opacity ring-1 ring-white/40"
-            title="Account manager for Alex Bennett"
+            className="w-7 h-7 rounded-full bg-white text-brand-cobalt flex items-center justify-center hover:opacity-90 transition-opacity ring-1 ring-white/40 cursor-pointer"
+            title={`Account manager for ${displayName}`}
           >
             <User size={15} strokeWidth={2.4} />
           </button>
@@ -389,12 +391,12 @@ export function TopBar({
           {isProfileMenuOpen && (
             <div className="absolute right-0 mt-2 w-72 bg-white text-[#1F2937] rounded-md border border-gray-200 shadow-[0_4px_24px_rgba(0,0,0,0.14)] p-4 z-50 animate-in fade-in duration-100">
               <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="w-10 h-10 bg-brand-cobalt text-white font-medium text-sm flex items-center justify-center rounded-full">
-                  <User size={18} />
+                <div className="w-10 h-10 bg-brand-cobalt text-white font-medium text-sm flex items-center justify-center rounded-full uppercase">
+                  {displayName.charAt(0) || 'U'}
                 </div>
                 <div className="min-w-0">
-                  <div className="font-semibold text-sm truncate">Alex Bennett</div>
-                  <div className="text-xs text-gray-500 truncate">alex.bennett@outlook.com</div>
+                  <div className="font-semibold text-sm truncate">{displayName}</div>
+                  <div className="text-xs text-gray-500 truncate">{userEmail}</div>
                 </div>
               </div>
 
@@ -405,7 +407,7 @@ export function TopBar({
                     setIsProfileMenuOpen(false);
                     onOpenSettings?.();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50 text-gray-700 text-xs text-left rounded transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50 text-gray-700 text-xs text-left rounded transition-colors cursor-pointer"
                 >
                   <User size={15} className="text-gray-500" />
                   <span>My Outlook profile</span>
@@ -415,7 +417,7 @@ export function TopBar({
                   onClick={() => {
                     setIsProfileMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50 text-gray-700 text-xs text-left rounded transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50 text-gray-700 text-xs text-left rounded transition-colors cursor-pointer"
                 >
                   <Users size={15} className="text-gray-500" />
                   <span>Switch account</span>
@@ -429,7 +431,7 @@ export function TopBar({
                     setIsProfileMenuOpen(false);
                     if (onSignOut) onSignOut();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-red-50 text-[#D83B01] text-xs text-left font-medium rounded transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2 py-2 hover:bg-red-50 text-[#D83B01] text-xs text-left font-medium rounded transition-colors cursor-pointer"
                 >
                   <LogOut size={15} />
                   <span>Sign out</span>
@@ -458,7 +460,7 @@ export function TopBar({
               <button
                 type="button"
                 onClick={() => setIsBuy365Open(false)}
-                className="p-1 hover:bg-white/20 text-white rounded transition-colors"
+                className="p-1 hover:bg-white/20 text-white rounded transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -500,7 +502,7 @@ export function TopBar({
               <button
                 type="button"
                 onClick={() => setIsBuy365Open(false)}
-                className="px-4 py-2 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-white transition-colors"
+                className="px-4 py-2 border border-gray-300 rounded text-xs font-medium text-gray-700 hover:bg-white transition-colors cursor-pointer"
               >
                 Maybe later
               </button>
@@ -509,7 +511,7 @@ export function TopBar({
                 onClick={() => {
                   setIsBuy365Open(false);
                 }}
-                className="px-4 py-2 bg-brand-cobalt text-white rounded text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs"
+                className="px-4 py-2 bg-brand-cobalt text-white rounded text-xs font-semibold hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
               >
                 Try free for 1 month
               </button>
@@ -520,4 +522,3 @@ export function TopBar({
     </header>
   );
 }
-

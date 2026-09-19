@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent, type MouseEvent } from 'react';
+import { useState, useMemo, useEffect, type FormEvent, type MouseEvent } from 'react';
 import {
   Sun,
   Star,
@@ -15,67 +15,17 @@ import {
   Clock,
   Tag,
   ListPlus,
-  AlignLeft
+  AlignLeft,
+  Menu
 } from 'lucide-react';
 import { Task, TaskListId, TaskStep } from '../../types/tasks';
-
-const INITIAL_TASKS: Task[] = [
-  {
-    id: '1',
-    listId: 'my-day',
-    title: 'Review weekly performance metrics and container SLA',
-    completed: false,
-    important: true,
-    dueDate: new Date().toISOString().split('T')[0],
-    category: 'Work',
-    notes: 'Verify CPU throttling and cloud egress latency in dashboard.',
-    steps: [
-      { id: 's1', title: 'Export Cloud Run logs', completed: true },
-      { id: 's2', title: 'Check percentile p99 response times', completed: false }
-    ],
-    createdAt: Date.now() - 3600000
-  },
-  {
-    id: '2',
-    listId: 'my-day',
-    title: 'Design review with Sarah Jenkins for navigation ribbons',
-    completed: true,
-    important: false,
-    dueDate: new Date().toISOString().split('T')[0],
-    category: 'Work',
-    createdAt: Date.now() - 7200000
-  },
-  {
-    id: '3',
-    listId: 'tasks',
-    title: 'Review and merge dependabot security pull requests',
-    completed: false,
-    important: true,
-    dueDate: '2026-09-18',
-    category: 'Work',
-    createdAt: Date.now() - 86400000
-  },
-  {
-    id: '4',
-    listId: 'flagged',
-    title: 'Follow up on David Chen invoice confirmation email',
-    completed: false,
-    important: false,
-    category: 'Follow-up',
-    notes: 'From email: Re: Q3 Cloud Services billing breakdown',
-    createdAt: Date.now() - 172800000
-  },
-  {
-    id: '5',
-    listId: 'planned',
-    title: 'Prepare quarterly OKR slide deck for all-hands',
-    completed: false,
-    important: false,
-    dueDate: '2026-09-22',
-    category: 'Work',
-    createdAt: Date.now() - 250000000
-  }
-];
+import { 
+  fetchTasks, 
+  insertTask, 
+  updateTask as updateTaskInService, 
+  deleteTask as deleteTaskFromService, 
+  INITIAL_TASKS 
+} from '../../lib/taskService';
 
 export interface TasksSectionProps {
   searchQuery?: string;
@@ -88,6 +38,20 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
   const [showCompleted, setShowCompleted] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>('1');
   const [newStepTitle, setNewStepTitle] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Load tasks from Supabase
+  useEffect(() => {
+    fetchTasks()
+      .then(loadedTasks => {
+        if (loadedTasks && loadedTasks.length > 0) {
+          setTasks(loadedTasks);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch tasks:', err);
+      });
+  }, []);
 
   const lists: { id: TaskListId; label: string; icon: any; color: string }[] = [
     { id: 'my-day', label: 'My Day', icon: Sun, color: 'text-[#0078D4]' },
@@ -140,19 +104,35 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
     setTasks([newTask, ...tasks]);
     setSelectedTaskId(newTask.id);
     setNewTaskTitle('');
+
+    insertTask(newTask).then(inserted => {
+      if (inserted && inserted.id !== newTask.id) {
+        setTasks(prev => prev.map(t => t.id === newTask.id ? inserted : t));
+        if (selectedTaskId === newTask.id) setSelectedTaskId(inserted.id);
+      }
+    }).catch(console.error);
   };
 
   const toggleTask = (taskId: string) => {
-    setTasks(tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
+    const target = tasks.find(t => t.id === taskId);
+    if (!target) return;
+    const newCompleted = !target.completed;
+    setTasks(tasks.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
+    updateTaskInService(taskId, { completed: newCompleted }).catch(console.error);
   };
 
   const toggleImportant = (taskId: string, e: MouseEvent) => {
     e.stopPropagation();
-    setTasks(tasks.map(t => t.id === taskId ? { ...t, important: !t.important } : t));
+    const target = tasks.find(t => t.id === taskId);
+    if (!target) return;
+    const newImportant = !target.important;
+    setTasks(tasks.map(t => t.id === taskId ? { ...t, important: newImportant } : t));
+    updateTaskInService(taskId, { important: newImportant }).catch(console.error);
   };
 
   const deleteTask = (taskId: string) => {
     setTasks(tasks.filter(t => t.id !== taskId));
+    deleteTaskFromService(taskId).catch(console.error);
     if (selectedTaskId === taskId) {
       setSelectedTaskId(null);
     }
@@ -161,6 +141,7 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
   const updateSelectedTask = (patch: Partial<Task>) => {
     if (!selectedTaskId) return;
     setTasks(tasks.map(t => t.id === selectedTaskId ? { ...t, ...patch } : t));
+    updateTaskInService(selectedTaskId, patch).catch(console.error);
   };
 
   const handleAddStep = (e: FormEvent) => {
@@ -195,14 +176,34 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
   const Icon = activeMeta?.icon || CheckSquare;
 
   return (
-    <div className="flex h-full bg-[#FAFAFA] text-[#242424] overflow-hidden select-none">
-      {/* 1. Left Lists Sidebar */}
-      <div className="w-60 border-r border-gray-200 bg-white flex flex-col py-4 px-2 flex-shrink-0">
-        <div className="px-3 pb-3 mb-2 border-b border-gray-100 flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-[#0078D4] text-white flex items-center justify-center">
-            <CheckSquare size={14} />
+    <div className="flex h-full bg-[#FAFAFA] text-[#242424] overflow-hidden select-none relative">
+      {/* Mobile backdrop for lists sidebar */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-40 md:hidden animate-in fade-in duration-200"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* 1. Left Lists Sidebar (drawer on mobile) */}
+      <div className={`fixed md:static inset-y-0 left-0 z-50 md:z-auto w-64 md:w-60 border-r border-gray-200 bg-white flex flex-col py-4 px-2 flex-shrink-0 shadow-xl md:shadow-none transition-transform duration-200 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="px-3 pb-3 mb-2 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-[#0078D4] text-white flex items-center justify-center">
+              <CheckSquare size={14} />
+            </div>
+            <span className="font-semibold text-xs text-gray-900 tracking-wide">To Do</span>
           </div>
-          <span className="font-semibold text-xs text-gray-900 tracking-wide">To Do</span>
+          <button 
+            type="button" 
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-1 text-gray-400 hover:text-gray-700 rounded-xs md:hidden"
+          >
+            <X size={15} />
+          </button>
         </div>
 
         <div className="flex flex-col gap-0.5">
@@ -222,7 +223,10 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
               <button
                 key={list.id}
                 type="button"
-                onClick={() => setActiveList(list.id)}
+                onClick={() => {
+                  setActiveList(list.id);
+                  setIsSidebarOpen(false);
+                }}
                 className={`flex items-center justify-between px-3 py-2 text-xs rounded-xs font-medium transition-colors ${
                   isActive
                     ? 'bg-blue-50/80 text-[#0078D4] font-semibold'
@@ -244,13 +248,21 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
 
       {/* 2. Middle Task Stream */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#FAF9F8] overflow-y-auto">
-        <div className="max-w-3xl w-full mx-auto px-8 py-8 flex-1 flex flex-col">
+        <div className="max-w-3xl w-full mx-auto px-4 md:px-8 py-6 md:py-8 flex-1 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-xs md:hidden"
+                title="Open list menu"
+              >
+                <Menu size={18} />
+              </button>
               <Icon size={24} className={activeMeta?.color} />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{activeMeta?.label}</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">{activeMeta?.label}</h1>
                 <p className="text-xs text-gray-500">
                   {new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}
                 </p>
@@ -392,7 +404,7 @@ export function TasksSection({ searchQuery = '' }: TasksSectionProps = {}) {
 
       {/* 3. Right Task Details Drawer */}
       {selectedTask && (
-        <div className="w-80 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 animate-in slide-in-from-right duration-150">
+        <div className="fixed md:static inset-y-0 right-0 z-40 md:z-auto w-full max-w-sm md:w-80 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 shadow-2xl md:shadow-none animate-in slide-in-from-right duration-150">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Task Details</span>
             <button

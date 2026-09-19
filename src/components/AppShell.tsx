@@ -20,6 +20,7 @@ interface AppShellProps {
   onSearchChange?: (q: string) => void;
   onOpenAdvancedSearch?: () => void;
   onOpenSettings?: () => void;
+  userEmail?: string;
   children: ReactNode;
 }
 
@@ -33,6 +34,7 @@ export function AppShell({
   onSearchChange = () => {},
   onOpenAdvancedSearch,
   onOpenSettings,
+  userEmail,
   children 
 }: AppShellProps) {
   return (
@@ -47,6 +49,7 @@ export function AppShell({
         onNavigate={onNavigate}
         searchQuery={searchQuery}
         onSearchChange={onSearchChange}
+        userEmail={userEmail}
       />
 
       {/* 2. Main Workspace: Slim Left Rail + Active Section Canvas */}
@@ -60,7 +63,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('inbox')}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors ${
+            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors cursor-pointer ${
               currentSection === 'inbox'
                 ? 'bg-white text-brand-cobalt shadow-xs'
                 : 'text-gray-600 hover:bg-gray-200/70'
@@ -77,7 +80,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('calendar')}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors ${
+            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors cursor-pointer ${
               currentSection === 'calendar'
                 ? 'bg-white text-brand-cobalt shadow-xs'
                 : 'text-gray-600 hover:bg-gray-200/70'
@@ -94,7 +97,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('people')}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors ${
+            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors cursor-pointer ${
               currentSection === 'people'
                 ? 'bg-white text-brand-cobalt shadow-xs'
                 : 'text-gray-600 hover:bg-gray-200/70'
@@ -111,7 +114,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('tasks')}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors ${
+            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors cursor-pointer ${
               currentSection === 'tasks'
                 ? 'bg-white text-brand-cobalt shadow-xs'
                 : 'text-gray-600 hover:bg-gray-200/70'
@@ -130,7 +133,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('apps')}
-            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors"
+            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
             title="Microsoft Word"
           >
             <div className="w-5 h-5 bg-[#185ABD] text-white rounded-xs flex items-center justify-center font-bold text-[11px] shadow-xs">
@@ -142,7 +145,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('apps')}
-            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors"
+            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
             title="Microsoft Excel"
           >
             <div className="w-5 h-5 bg-[#107C41] text-white rounded-xs flex items-center justify-center font-bold text-[11px] shadow-xs">
@@ -154,7 +157,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('apps')}
-            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors"
+            className="relative w-10 h-10 flex items-center justify-center rounded-sm text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
             title="Microsoft PowerPoint"
           >
             <div className="w-5 h-5 bg-[#C43E1C] text-white rounded-xs flex items-center justify-center font-bold text-[11px] shadow-xs">
@@ -166,7 +169,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onNavigate('apps')}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors mt-1 ${
+            className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-colors mt-1 cursor-pointer ${
               currentSection === 'apps'
                 ? 'bg-white text-brand-cobalt shadow-xs'
                 : 'text-gray-500 hover:bg-gray-200/70'
@@ -188,4 +191,3 @@ export function AppShell({
     </div>
   );
 }
-

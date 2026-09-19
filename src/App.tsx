@@ -16,6 +16,7 @@ import { AdvancedSearchModal, AdvancedSearchFilters } from './components/mail/Ad
 import { INITIAL_FOLDERS } from './data/initialMailData';
 import { EnvelopeLoader } from './components/EnvelopeLoader';
 import { IconLoader } from './components/IconLoader';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 type AppState = 'entry-loader' | 'signin' | 'post-signin-loader' | 'app';
 
@@ -45,6 +46,34 @@ export default function App() {
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters | null>(null);
 
+  // Supabase Session Listener (keeps user logged in on page reload, routes to signin on expire)
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    // Check current active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        // If still on signin, advance
+        setAppState(prev => (prev === 'signin' ? 'app' : prev));
+      }
+    });
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+      } else {
+        // If session was cleared / logged out
+        setAppState('signin');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Synchronize dynamic theme accent and dark mode
   useEffect(() => {
     document.documentElement.style.setProperty('--color-brand-cobalt', settings.themeColor);
@@ -54,6 +83,17 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [settings.themeColor, settings.isDarkMode]);
+
+  const handleSignOut = async () => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Sign out error:', err);
+      }
+    }
+    setAppState('signin');
+  };
 
   if (appState === 'entry-loader') {
     return <EnvelopeLoader onComplete={() => setAppState('signin')} />;
@@ -84,11 +124,12 @@ export default function App() {
       <AppShell 
         currentSection={currentSection} 
         onNavigate={setCurrentSection}
-        onSignOut={() => setAppState('signin')}
+        onSignOut={handleSignOut}
         isFolderPaneOpen={isFolderPaneOpen}
         onToggleFolderPane={() => setIsFolderPaneOpen(prev => !prev)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        userEmail={userEmail}
         onOpenAdvancedSearch={() => {
           setIsAdvancedSearchOpen(true);
           setIsSettingsOpen(false);
@@ -116,6 +157,7 @@ export default function App() {
             autoRepliesEnabled={settings.autoRepliesEnabled}
             onDisableAutoReplies={() => setSettings(prev => ({ ...prev, autoRepliesEnabled: false }))}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            accountEmail={userEmail || 'alex.bennett@outlook.com'}
           />
         )}
         {currentSection === 'calendar' && (
@@ -128,7 +170,7 @@ export default function App() {
         {currentSection === 'people' && (
           <PeopleSection
             searchQuery={searchQuery}
-            onSendEmailTo={(email, name) => {
+            onSendEmailTo={(email) => {
               setPrefillCompose({ to: email });
               setCurrentSection('inbox');
             }}
@@ -171,4 +213,3 @@ export default function App() {
     </>
   );
 }
-

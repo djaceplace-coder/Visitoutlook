@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import {
   Users,
   Star,
@@ -15,10 +15,18 @@ import {
   Check,
   Briefcase,
   UserCheck,
-  Filter
+  Filter,
+  Menu,
+  ChevronLeft
 } from 'lucide-react';
 import { Contact } from '../../types/contacts';
 import { INITIAL_CONTACTS } from '../../data/initialContactsData';
+import {
+  fetchContacts,
+  insertContact,
+  updateContact,
+  deleteContact
+} from '../../lib/contactService';
 
 interface PeopleSectionProps {
   onSendEmailTo?: (email: string, name: string) => void;
@@ -32,6 +40,24 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
   const [activeFolder, setActiveFolder] = useState<'all' | 'favorites' | 'work' | 'personal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isViewingMobileDetails, setIsViewingMobileDetails] = useState(false);
+
+  // Load contacts from Supabase
+  useEffect(() => {
+    fetchContacts()
+      .then(loadedContacts => {
+        if (loadedContacts && loadedContacts.length > 0) {
+          setContacts(loadedContacts);
+          if (!loadedContacts.some(c => c.id === selectedContactId)) {
+            setSelectedContactId(loadedContacts[0].id);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch contacts:', err);
+      });
+  }, []);
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,8 +155,10 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
     }
 
     if (editingContactId) {
-      setContacts(prev => prev.map(c => c.id === editingContactId ? {
-        ...c,
+      const existing = contacts.find(c => c.id === editingContactId);
+      const updatedContact: Contact = {
+        ...existing,
+        id: editingContactId,
         firstName: formFirstName.trim(),
         lastName: formLastName.trim(),
         email: formEmail.trim(),
@@ -141,8 +169,12 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
         mobile: formMobile.trim(),
         officeLocation: formOffice.trim(),
         notes: formNotes.trim(),
-        category: formCategory
-      } : c));
+        category: formCategory,
+        avatarColor: existing?.avatarColor || 'bg-[#0078D4]',
+        isFavorite: existing?.isFavorite || false
+      };
+      setContacts(prev => prev.map(c => c.id === editingContactId ? updatedContact : c));
+      updateContact(updatedContact).catch(console.error);
       showToast(`Contact ${formFirstName} ${formLastName} updated`);
     } else {
       const newContact: Contact = {
@@ -163,6 +195,12 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
       };
       setContacts(prev => [newContact, ...prev]);
       setSelectedContactId(newContact.id);
+      insertContact(newContact).then(inserted => {
+        if (inserted && inserted.id !== newContact.id) {
+          setContacts(prev => prev.map(c => c.id === newContact.id ? inserted : c));
+          if (selectedContactId === newContact.id) setSelectedContactId(inserted.id);
+        }
+      }).catch(console.error);
       showToast(`Contact ${newContact.firstName} ${newContact.lastName} created`);
     }
 
@@ -172,38 +210,65 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
   const handleDeleteContact = (id: string) => {
     const target = contacts.find(c => c.id === id);
     setContacts(prev => prev.filter(c => c.id !== id));
+    deleteContact(id).catch(console.error);
     if (selectedContactId === id) {
       const next = contacts.find(c => c.id !== id);
       if (next) setSelectedContactId(next.id);
     }
+    setIsViewingMobileDetails(false);
     showToast(`Deleted ${target?.firstName || 'contact'} from address book`);
   };
 
   const toggleFavorite = (id: string) => {
-    setContacts(prev => prev.map(c => c.id === id ? { ...c, isFavorite: !c.isFavorite } : c));
+    const target = contacts.find(c => c.id === id);
+    if (!target) return;
+    const updated = { ...target, isFavorite: !target.isFavorite };
+    setContacts(prev => prev.map(c => c.id === id ? updated : c));
+    updateContact(updated).catch(console.error);
   };
 
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
   return (
-    <div className="flex h-full bg-[#FAFAFA] text-gray-800 overflow-hidden select-none">
-      {/* 1. Left Folder Navigation */}
-      <div className="w-56 border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
-        <div className="p-3 border-b border-gray-200">
+    <div className="flex h-full bg-[#FAFAFA] text-gray-800 overflow-hidden select-none relative">
+      {/* Mobile backdrop for folder sidebar */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-40 md:hidden animate-in fade-in duration-200"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* 1. Left Folder Navigation (drawer on mobile) */}
+      <div className={`fixed md:static inset-y-0 left-0 z-50 md:z-auto w-64 md:w-56 border-r border-gray-200 bg-white flex flex-col flex-shrink-0 shadow-xl md:shadow-none transition-transform duration-200 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="p-3 border-b border-gray-200 flex items-center justify-between">
           <button
             type="button"
-            onClick={openNewContactModal}
-            className="w-full flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#005A9E] text-white py-1.5 px-3 rounded-xs text-xs font-semibold shadow-xs transition-colors"
+            onClick={() => {
+              openNewContactModal();
+              setIsSidebarOpen(false);
+            }}
+            className="flex-1 flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#005A9E] text-white py-1.5 px-3 rounded-xs text-xs font-semibold shadow-xs transition-colors"
           >
             <Plus size={15} />
             <span>New contact</span>
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setIsSidebarOpen(false)}
+            className="ml-2 p-1 text-gray-400 hover:text-gray-700 rounded-xs md:hidden"
+          >
+            <X size={16} />
           </button>
         </div>
 
         <div className="p-2 space-y-0.5">
           <button
             type="button"
-            onClick={() => { setActiveFolder('all'); setSelectedLetter(null); }}
+            onClick={() => { setActiveFolder('all'); setSelectedLetter(null); setIsSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xs font-medium transition-colors ${
               activeFolder === 'all' && !selectedLetter ? 'bg-blue-50 text-[#0078D4] font-semibold' : 'text-gray-700 hover:bg-gray-100'
             }`}
@@ -217,7 +282,7 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
 
           <button
             type="button"
-            onClick={() => { setActiveFolder('favorites'); setSelectedLetter(null); }}
+            onClick={() => { setActiveFolder('favorites'); setSelectedLetter(null); setIsSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xs font-medium transition-colors ${
               activeFolder === 'favorites' ? 'bg-blue-50 text-[#0078D4] font-semibold' : 'text-gray-700 hover:bg-gray-100'
             }`}
@@ -233,7 +298,7 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
 
           <button
             type="button"
-            onClick={() => { setActiveFolder('work'); setSelectedLetter(null); }}
+            onClick={() => { setActiveFolder('work'); setSelectedLetter(null); setIsSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xs font-medium transition-colors ${
               activeFolder === 'work' ? 'bg-blue-50 text-[#0078D4] font-semibold' : 'text-gray-700 hover:bg-gray-100'
             }`}
@@ -249,7 +314,7 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
 
           <button
             type="button"
-            onClick={() => { setActiveFolder('personal'); setSelectedLetter(null); }}
+            onClick={() => { setActiveFolder('personal'); setSelectedLetter(null); setIsSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xs font-medium transition-colors ${
               activeFolder === 'personal' ? 'bg-blue-50 text-[#0078D4] font-semibold' : 'text-gray-700 hover:bg-gray-100'
             }`}
@@ -266,10 +331,20 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
       </div>
 
       {/* 2. Middle Contacts List */}
-      <div className="w-80 border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
-        {/* Search header */}
-        <div className="p-3 border-b border-gray-200">
-          <div className="relative">
+      <div className={`w-full md:w-80 border-r border-gray-200 bg-white flex flex-col flex-shrink-0 ${
+        isViewingMobileDetails ? 'hidden md:flex' : 'flex'
+      }`}>
+        {/* Search header with mobile menu button */}
+        <div className="p-3 border-b border-gray-200 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-1 text-gray-500 hover:text-gray-900 rounded-xs md:hidden"
+            title="Open folders menu"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="relative flex-1">
             <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
             <input
               type="text"
@@ -337,7 +412,10 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
               return (
                 <div
                   key={contact.id}
-                  onClick={() => setSelectedContactId(contact.id)}
+                  onClick={() => {
+                    setSelectedContactId(contact.id);
+                    setIsViewingMobileDetails(true);
+                  }}
                   className={`p-3 flex items-center gap-3 cursor-pointer transition-colors ${
                     isSelected ? 'bg-blue-50/80 border-l-4 border-l-[#0078D4]' : 'hover:bg-gray-50'
                   }`}
@@ -365,7 +443,20 @@ export function PeopleSection({ onSendEmailTo, onScheduleMeetingWith, searchQuer
       </div>
 
       {/* 3. Right Contact Details Pane */}
-      <div className="flex-1 flex flex-col bg-white overflow-y-auto">
+      <div className={`flex-1 flex flex-col bg-white overflow-y-auto ${
+        isViewingMobileDetails ? 'flex' : 'hidden md:flex'
+      }`}>
+        {/* Mobile back bar */}
+        <div className="md:hidden p-3 border-b border-gray-200 flex items-center gap-2 bg-gray-50">
+          <button
+            type="button"
+            onClick={() => setIsViewingMobileDetails(false)}
+            className="flex items-center gap-1 text-xs font-semibold text-[#0078D4]"
+          >
+            <ChevronLeft size={16} />
+            <span>Contacts</span>
+          </button>
+        </div>
         {selectedContact ? (
           <div className="max-w-3xl w-full mx-auto p-8 space-y-6">
             {/* Header / Hero */}

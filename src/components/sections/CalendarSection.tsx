@@ -13,62 +13,19 @@ import {
   Users,
   Tag,
   Check,
-  CheckSquare
+  CheckSquare,
+  Menu
 } from 'lucide-react';
 import { CalendarEvent, CalendarCategory } from '../../types/calendar';
+import { 
+  fetchCalendarEvents, 
+  insertCalendarEvent, 
+  updateCalendarEvent, 
+  deleteCalendarEvent,
+  INITIAL_CALENDAR_EVENTS 
+} from '../../lib/calendarService';
 
 type ViewMode = 'day' | 'workweek' | 'week' | 'month';
-
-const INITIAL_EVENTS: CalendarEvent[] = [
-  {
-    id: '1',
-    title: 'Executive Design Review: Fluent Web Overhaul',
-    date: new Date().toISOString().split('T')[0],
-    startTime: '10:00',
-    endTime: '11:30',
-    location: 'Conference Room 4B / Microsoft Teams',
-    isTeamsMeeting: true,
-    attendees: ['sarah.jenkins@acmecorp.com', 'david.chen@acmecorp.com'],
-    category: 'Blue',
-    notes: 'Presenting the high-contrast light shell and unified ribbon controls.'
-  },
-  {
-    id: '2',
-    title: '1:1 Sync with Sarah Jenkins',
-    date: new Date().toISOString().split('T')[0],
-    startTime: '13:00',
-    endTime: '14:00',
-    location: 'Cafe Terra & Teams',
-    isTeamsMeeting: true,
-    attendees: ['sarah.jenkins@acmecorp.com'],
-    category: 'Green',
-    notes: 'Catch up on typography scale decisions and spacing tokens.'
-  },
-  {
-    id: '3',
-    title: 'Cloud Run SLA & Egress Review',
-    date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    startTime: '14:30',
-    endTime: '15:30',
-    location: 'Executive Suite 8A',
-    isTeamsMeeting: false,
-    attendees: ['david.chen@acmecorp.com', 'marcus.v@acmecorp.com'],
-    category: 'Purple',
-    notes: 'Deep dive into container cold-start times and cache hit ratio.'
-  },
-  {
-    id: '4',
-    title: 'Contoso Enterprise Partnership Kickoff',
-    date: new Date(Date.now() + 172800000).toISOString().split('T')[0],
-    startTime: '11:00',
-    endTime: '12:00',
-    location: 'Microsoft Teams Meeting',
-    isTeamsMeeting: true,
-    attendees: ['emily.taylor@enterprise.org'],
-    category: 'Orange',
-    notes: 'Review shared enterprise milestones for Q4 rollout.'
-  }
-];
 
 export interface CalendarSectionProps {
   prefillEvent?: { title?: string; attendees?: string[] } | null;
@@ -77,9 +34,23 @@ export interface CalendarSectionProps {
 }
 
 export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery = '' }: CalendarSectionProps = {}) {
-  const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
+  const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_CALENDAR_EVENTS);
   const [view, setView] = useState<ViewMode>('workweek');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Load events from Supabase
+  useEffect(() => {
+    fetchCalendarEvents()
+      .then(loadedEvents => {
+        if (loadedEvents && loadedEvents.length > 0) {
+          setEvents(loadedEvents);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch calendar events:', err);
+      });
+  }, []);
   
   // Modals & Feedback
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -200,8 +171,8 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
       .filter(Boolean);
 
     if (selectedEventId) {
-      setEvents(events.map(ev => ev.id === selectedEventId ? {
-        ...ev,
+      const updatedEv: CalendarEvent = {
+        id: selectedEventId,
         title: formTitle.trim(),
         date: formDate,
         startTime: formAllDay ? '00:00' : formStart,
@@ -212,7 +183,9 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
         category: formCategory,
         allDay: formAllDay,
         notes: formNotes.trim()
-      } : ev));
+      };
+      setEvents(events.map(ev => ev.id === selectedEventId ? updatedEv : ev));
+      updateCalendarEvent(updatedEv).catch(console.error);
       showToast(`Updated event "${formTitle}"`);
     } else {
       const newEv: CalendarEvent = {
@@ -229,6 +202,11 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
         notes: formNotes.trim()
       };
       setEvents([newEv, ...events]);
+      insertCalendarEvent(newEv).then(inserted => {
+        if (inserted && inserted.id !== newEv.id) {
+          setEvents(prev => prev.map(ev => ev.id === newEv.id ? inserted : ev));
+        }
+      }).catch(console.error);
       showToast(`Created event "${formTitle}"`);
     }
     setIsEventModalOpen(false);
@@ -237,6 +215,7 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
   const handleDeleteEvent = (id: string) => {
     const target = events.find(ev => ev.id === id);
     setEvents(events.filter(ev => ev.id !== id));
+    deleteCalendarEvent(id).catch(console.error);
     setIsEventModalOpen(false);
     showToast(`Deleted "${target?.title || 'event'}"`);
   };
@@ -299,15 +278,40 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     return (
-      <div className="w-56 p-3 border-r border-gray-200 bg-white flex flex-col flex-shrink-0 select-none">
-        <button 
-          type="button"
-          onClick={openNewEventModal}
-          className="mb-4 flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#005A9E] text-white py-1.5 px-3 rounded-xs text-xs font-semibold shadow-xs transition-colors"
-        >
-          <Plus size={15} />
-          <span>New event</span>
-        </button>
+      <>
+        {/* Mobile backdrop for calendar sidebar */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/40 z-40 md:hidden animate-in fade-in duration-200" 
+            onClick={() => setIsSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <div className={`fixed md:static inset-y-0 left-0 z-50 md:z-auto w-64 md:w-56 p-3 border-r border-gray-200 bg-white flex flex-col flex-shrink-0 select-none shadow-xl md:shadow-none transition-transform duration-200 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
+          <div className="flex items-center justify-between md:hidden mb-2 pb-2 border-b border-gray-100">
+            <span className="text-xs font-bold text-gray-700">Calendar Navigator</span>
+            <button 
+              type="button" 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-1 text-gray-400 hover:text-gray-700 rounded-xs"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <button 
+            type="button"
+            onClick={() => {
+              openNewEventModal();
+              setIsSidebarOpen(false);
+            }}
+            className="mb-4 flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#005A9E] text-white py-1.5 px-3 rounded-xs text-xs font-semibold shadow-xs transition-colors"
+          >
+            <Plus size={15} />
+            <span>New event</span>
+          </button>
 
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="font-bold text-xs text-gray-800">{monthNames[month]} {year}</span>
@@ -372,6 +376,7 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
           </div>
         </div>
       </div>
+      </>
     );
   };
 
@@ -589,12 +594,20 @@ export function CalendarSection({ prefillEvent, onClearPrefillEvent, searchQuery
       {/* 2. Main Calendar Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Outlook Calendar Header Toolbar */}
-        <header className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-3 md:px-4 flex-shrink-0">
+          <div className="flex items-center gap-2 md:gap-3">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xs md:hidden"
+              title="Open calendar drawer"
+            >
+              <Menu size={18} />
+            </button>
             <button
               type="button"
               onClick={handleToday}
-              className="px-3 py-1 text-xs font-semibold text-gray-700 border border-gray-300 rounded-xs hover:bg-gray-100 transition-colors"
+              className="px-2.5 md:px-3 py-1 text-xs font-semibold text-gray-700 border border-gray-300 rounded-xs hover:bg-gray-100 transition-colors"
             >
               Today
             </button>

@@ -45,6 +45,13 @@ import {
   RibbonTab 
 } from '../../types/mail';
 import { INITIAL_FOLDERS, INITIAL_MESSAGES } from '../../data/initialMailData';
+import {
+  fetchMailFolders,
+  fetchMailMessages,
+  insertMailMessage,
+  updateMailMessages,
+  insertUserFolder,
+} from '../../lib/mailService';
 
 interface InboxSectionProps {
   isFolderPaneOpen: boolean;
@@ -63,6 +70,7 @@ interface InboxSectionProps {
   autoRepliesEnabled?: boolean;
   onDisableAutoReplies?: () => void;
   onOpenSettings?: () => void;
+  accountEmail?: string;
 }
 
 export function InboxSection({
@@ -82,6 +90,7 @@ export function InboxSection({
   autoRepliesEnabled = false,
   onDisableAutoReplies,
   onOpenSettings,
+  accountEmail = 'alex.bennett@outlook.com',
 }: InboxSectionProps) {
   // Data state
   const [messages, setMessages] = useState<EmailMessage[]>(INITIAL_MESSAGES);
@@ -93,6 +102,35 @@ export function InboxSection({
   
   // Toast notification with Undo
   const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
+
+  // Load Folders & Messages from Supabase on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        const [fetchedFolders, fetchedMessages] = await Promise.all([
+          fetchMailFolders(),
+          fetchMailMessages(),
+        ]);
+        if (isMounted) {
+          if (fetchedFolders && fetchedFolders.length > 0) setFolders(fetchedFolders);
+          if (fetchedMessages && fetchedMessages.length > 0) {
+            setMessages(fetchedMessages);
+            setSelectedMessageId(fetchedMessages[0]?.id || null);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load mail data from Supabase:', err);
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Helper to find folder name by id
   const getFolderNameById = (id: string, list: FolderItem[] = folders): string => {
@@ -107,7 +145,7 @@ export function InboxSection({
   };
 
   // Folder management operations
-  const handleCreateFolder = (name: string, parentId?: string | null) => {
+  const handleCreateFolder = async (name: string, parentId?: string | null) => {
     const newFolder: FolderItem = {
       id: `folder-${Date.now()}`,
       name,
@@ -139,6 +177,13 @@ export function InboxSection({
     }
     setToast({ message: `Folder "${name}" created.` });
     setTimeout(() => setToast(null), 4000);
+
+    // Sync to Supabase in background
+    try {
+      await insertUserFolder(name, parentId || null);
+    } catch (err) {
+      console.error('Failed to create folder in Supabase:', err);
+    }
   };
 
   const handleRenameFolder = (folderId: string, newName: string) => {
@@ -204,11 +249,17 @@ export function InboxSection({
 
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, folder: targetFolderId } : m));
 
+    // Sync to Supabase
+    updateMailMessages([messageId], { folder: targetFolderId }).catch(err => {
+      console.error('Failed to sync move to Supabase:', err);
+    });
+
     const targetName = getFolderNameById(targetFolderId);
     setToast({
       message: `Moved conversation to ${targetName}.`,
       onUndo: () => {
         setMessages(prev => prev.map(m => m.id === messageId ? { ...m, folder: previousFolder } : m));
+        updateMailMessages([messageId], { folder: previousFolder }).catch(console.error);
         setToast({ message: 'Move undone.' });
         setTimeout(() => setToast(null), 3000);
       }
@@ -395,6 +446,11 @@ export function InboxSection({
     setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, folder: 'deleted' } : msg));
     setSelectedMessageIds(new Set());
 
+    // Sync to Supabase
+    updateMailMessages(ids, { folder: 'deleted' }).catch(err => {
+      console.error('Failed to sync delete to Supabase:', err);
+    });
+
     if (selectedMessageId && ids.includes(selectedMessageId)) {
       const remaining = messages.filter(m => !ids.includes(m.id) && m.folder === activeFolderId);
       setSelectedMessageId(remaining.length > 0 ? remaining[0].id : null);
@@ -407,6 +463,10 @@ export function InboxSection({
           const old = previousState.find(p => p.id === m.id);
           return old ? { ...m, folder: old.folder } : m;
         }));
+        // Revert in Supabase
+        previousState.forEach(p => {
+          updateMailMessages([p.id], { folder: p.folder }).catch(console.error);
+        });
         setToast({ message: 'Deletion undone.' });
         setTimeout(() => setToast(null), 3000);
       }
@@ -417,19 +477,37 @@ export function InboxSection({
   const handleToggleReadMessages = (ids: string[]) => {
     if (ids.length === 0) return;
     const allRead = ids.every(id => messages.find(m => m.id === id)?.read);
-    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, read: !allRead } : msg));
+    const newReadState = !allRead;
+    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, read: newReadState } : msg));
+
+    // Sync to Supabase
+    updateMailMessages(ids, { read: newReadState }).catch(err => {
+      console.error('Failed to sync read status to Supabase:', err);
+    });
   };
 
   const handleToggleFlagMessages = (ids: string[]) => {
     if (ids.length === 0) return;
     const allFlagged = ids.every(id => messages.find(m => m.id === id)?.flagged);
-    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, flagged: !allFlagged } : msg));
+    const newFlagState = !allFlagged;
+    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, flagged: newFlagState } : msg));
+
+    // Sync to Supabase
+    updateMailMessages(ids, { flagged: newFlagState }).catch(err => {
+      console.error('Failed to sync flag status to Supabase:', err);
+    });
   };
 
   const handleTogglePinMessages = (ids: string[]) => {
     if (ids.length === 0) return;
     const allPinned = ids.every(id => messages.find(m => m.id === id)?.pinned);
-    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, pinned: !allPinned } : msg));
+    const newPinState = !allPinned;
+    setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, pinned: newPinState } : msg));
+
+    // Sync to Supabase
+    updateMailMessages(ids, { pinned: newPinState }).catch(err => {
+      console.error('Failed to sync pin status to Supabase:', err);
+    });
   };
 
   const handleMoveMessages = (ids: string[], targetFolderId: string) => {
@@ -439,6 +517,11 @@ export function InboxSection({
     setMessages(prev => prev.map(msg => ids.includes(msg.id) ? { ...msg, folder: targetFolderId } : msg));
     setSelectedMessageIds(new Set());
 
+    // Sync to Supabase
+    updateMailMessages(ids, { folder: targetFolderId }).catch(err => {
+      console.error('Failed to sync move to Supabase:', err);
+    });
+
     const targetName = getFolderNameById(targetFolderId);
     setToast({
       message: `Moved ${ids.length} item${ids.length > 1 ? 's' : ''} to ${targetName}.`,
@@ -447,6 +530,10 @@ export function InboxSection({
           const old = previousState.find(p => p.id === m.id);
           return old ? { ...m, folder: old.folder } : m;
         }));
+        // Revert in Supabase
+        previousState.forEach(p => {
+          updateMailMessages([p.id], { folder: p.folder }).catch(console.error);
+        });
         setToast({ message: 'Move undone.' });
         setTimeout(() => setToast(null), 3000);
       }
@@ -610,7 +697,7 @@ export function InboxSection({
       threadId: replyData.threadId,
       folder: activeFolderId === 'inbox' ? 'inbox' : 'sent',
       tab: 'focused',
-      from: { name: 'Alex Bennett', email: 'alex.bennett@outlook.com' },
+      from: { name: 'Alex Bennett', email: accountEmail },
       to: replyData.to,
       subject: replyData.subject,
       preview: replyData.body.slice(0, 100),
@@ -621,6 +708,12 @@ export function InboxSection({
       flagged: false
     };
     setMessages(prev => [newMsg, ...prev]);
+
+    // Insert into Supabase in background
+    insertMailMessage(newMsg).catch(err => {
+      console.error('Failed to save inline reply in Supabase:', err);
+    });
+
     setToast({ 
       message: replyData.type === 'forward' ? 'Message forwarded successfully.' : 'Reply sent successfully.' 
     });
@@ -673,7 +766,7 @@ export function InboxSection({
       threadId: `th-${Date.now()}`,
       folder: 'sent',
       tab: 'focused',
-      from: { name: 'Alex Bennett', email: 'alex.bennett@outlook.com' },
+      from: { name: 'Alex Bennett', email: accountEmail },
       to: msgData.to,
       cc: msgData.cc,
       bcc: msgData.bcc,
@@ -690,6 +783,12 @@ export function InboxSection({
     };
 
     setMessages(prev => [newSentMessage, ...prev]);
+
+    // Insert into Supabase in background
+    insertMailMessage(newSentMessage).catch(err => {
+      console.error('Failed to save sent message to Supabase:', err);
+    });
+
     setIsComposeOpen(false);
     setComposeTo('');
     setComposeSubject('');
@@ -699,6 +798,7 @@ export function InboxSection({
       message: 'Message sent.',
       onUndo: () => {
         setMessages(prev => prev.filter(m => m.id !== newSentMessage.id));
+        updateMailMessages([newSentMessage.id], { folder: 'drafts' }).catch(console.error);
         setToast({ message: 'Send undone. Message restored to Drafts.' });
         setTimeout(() => setToast(null), 3000);
       }
@@ -930,80 +1030,86 @@ export function InboxSection({
           onMarkFolderAsRead={handleMarkFolderAsRead}
           onEmptyFolder={handleEmptyFolder}
           onMoveMessageToFolder={handleMoveMessageToFolder}
-          accountEmail="alex.bennett@outlook.com"
+          accountEmail={accountEmail}
         />
 
         {/* PANE 2 & 3: Message list pane + Reading pane (Right or Bottom or Full) */}
         <div className={`flex-1 flex min-w-0 ${readingPanePosition === 'bottom' ? 'flex-col' : 'flex-row'}`}>
-          {/* PANE 2: Message List Pane */}
-          <MessageList
-            messages={messages}
-            activeFolderId={activeFolderId}
-            activeFolderName={getFolderNameById(activeFolderId)}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            selectedMessageId={selectedMessageId}
-            onSelectMessage={(id) => setSelectedMessageId(id)}
-            selectedMessageIds={selectedMessageIds}
-            onToggleSelectMessage={handleToggleSelectMessage}
-            onSelectAll={handleSelectAll}
-            onClearSelection={handleClearSelection}
-            density={density}
-            readingPanePosition={readingPanePosition}
-            isConversationGrouping={conversationGrouping}
-            onToggleConversationGrouping={() => setConversationGrouping(prev => !prev)}
-            onDeleteMessages={handleDeleteMessages}
-            onToggleReadMessages={handleToggleReadMessages}
-            onToggleFlagMessages={handleToggleFlagMessages}
-            onTogglePinMessages={handleTogglePinMessages}
-            onMoveMessages={handleMoveMessages}
-            searchQuery={searchQuery}
-            folders={folders}
-            advancedFilters={advancedFilters}
-            onClearAdvancedFilters={onClearAdvancedFilters}
-            enableFocusedInbox={enableFocusedInbox}
-          />
+          {/* PANE 2: Message List Pane (Hidden on mobile if reading pane is actively viewing a message) */}
+          <div className={`${selectedMessageId && readingPanePosition !== 'off' ? 'hidden md:flex md:flex-shrink-0' : 'flex flex-1'} min-w-0`}>
+            <MessageList
+              messages={messages}
+              activeFolderId={activeFolderId}
+              activeFolderName={getFolderNameById(activeFolderId)}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              selectedMessageId={selectedMessageId}
+              onSelectMessage={(id) => setSelectedMessageId(id)}
+              selectedMessageIds={selectedMessageIds}
+              onToggleSelectMessage={handleToggleSelectMessage}
+              onSelectAll={handleSelectAll}
+              onClearSelection={handleClearSelection}
+              density={density}
+              readingPanePosition={readingPanePosition}
+              isConversationGrouping={conversationGrouping}
+              onToggleConversationGrouping={() => setConversationGrouping(prev => !prev)}
+              onDeleteMessages={handleDeleteMessages}
+              onToggleReadMessages={handleToggleReadMessages}
+              onToggleFlagMessages={handleToggleFlagMessages}
+              onTogglePinMessages={handleTogglePinMessages}
+              onMoveMessages={handleMoveMessages}
+              searchQuery={searchQuery}
+              folders={folders}
+              advancedFilters={advancedFilters}
+              onClearAdvancedFilters={onClearAdvancedFilters}
+              enableFocusedInbox={enableFocusedInbox}
+              onOpenFolderPane={onToggleFolderPane}
+            />
+          </div>
 
           {/* PANE 3: Reading Pane (collapsible / configurable) */}
           {readingPanePosition !== 'off' && (
-            <ReadingPane
-              message={selectedMessage}
-              allMessages={messages}
-              onReply={(to, subject, initialBody) => {
-                setComposeTo(to);
-                setComposeSubject(subject);
-                if (initialBody) setComposeBody(initialBody);
-                setIsComposeOpen(true);
-              }}
-              onReplyAll={(to, cc, subject, initialBody) => {
-                setComposeTo(to.join(', '));
-                setComposeSubject(subject);
-                if (initialBody) setComposeBody(initialBody);
-                setIsComposeOpen(true);
-              }}
-              onForward={(subject, body) => {
-                setComposeSubject(subject);
-                setComposeBody(body);
-                setIsComposeOpen(true);
-              }}
-              onDelete={(id) => handleDeleteMessages([id])}
-              onArchive={(id) => handleMoveMessages([id], 'archive')}
-              onToggleRead={(id) => handleToggleReadMessages([id])}
-              onToggleFlag={(id) => handleToggleFlagMessages([id])}
-              onTogglePin={(id) => handleTogglePinMessages([id])}
-              onSendInlineReply={handleSendInlineReply}
-              onOpenFullCompose={(prefill) => {
-                setComposeTo(prefill.to);
-                setComposeSubject(prefill.subject);
-                setComposeBody(prefill.body);
-                setIsComposeOpen(true);
-              }}
-              readingPanePosition={readingPanePosition}
-              onCategorize={handleCategorize}
-              onSnooze={handleSnooze}
-              onQuickStep={handleQuickStep}
-              onUpdateMeetingStatus={handleUpdateMeetingStatus}
-            />
+            <div className={`${!selectedMessageId ? 'hidden md:flex md:flex-1' : 'flex flex-1'} min-w-0 h-full`}>
+              <ReadingPane
+                message={selectedMessage}
+                allMessages={messages}
+                onBack={() => setSelectedMessageId(null)}
+                onReply={(to, subject, initialBody) => {
+                  setComposeTo(to);
+                  setComposeSubject(subject);
+                  if (initialBody) setComposeBody(initialBody);
+                  setIsComposeOpen(true);
+                }}
+                onReplyAll={(to, cc, subject, initialBody) => {
+                  setComposeTo(to.join(', '));
+                  setComposeSubject(subject);
+                  if (initialBody) setComposeBody(initialBody);
+                  setIsComposeOpen(true);
+                }}
+                onForward={(subject, body) => {
+                  setComposeSubject(subject);
+                  setComposeBody(body);
+                  setIsComposeOpen(true);
+                }}
+                onDelete={(id) => handleDeleteMessages([id])}
+                onArchive={(id) => handleMoveMessages([id], 'archive')}
+                onToggleRead={(id) => handleToggleReadMessages([id])}
+                onToggleFlag={(id) => handleToggleFlagMessages([id])}
+                onTogglePin={(id) => handleTogglePinMessages([id])}
+                onSendInlineReply={handleSendInlineReply}
+                onOpenFullCompose={(prefill) => {
+                  setComposeTo(prefill.to);
+                  setComposeSubject(prefill.subject);
+                  setComposeBody(prefill.body);
+                  setIsComposeOpen(true);
+                }}
+                readingPanePosition={readingPanePosition}
+                onCategorize={handleCategorize}
+                onSnooze={handleSnooze}
+                onQuickStep={handleQuickStep}
+                onUpdateMeetingStatus={handleUpdateMeetingStatus}
+              />
+            </div>
           )}
         </div>
       </div>
