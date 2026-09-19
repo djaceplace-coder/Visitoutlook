@@ -151,13 +151,19 @@ export function SignIn({ onSignIn }: SignInProps) {
 
         // Record into public.users table so it is immediately visible in Supabase Table Editor
         try {
-          await supabase.from('users').upsert({
-            id: newUserId || undefined,
+          const userRecord: Record<string, any> = {
             email: userEmail,
             display_name: userEmail.split('@')[0],
-            created_at: new Date().toISOString(),
             last_sign_in_at: new Date().toISOString(),
-          }, { onConflict: 'email' });
+          };
+          if (newUserId) {
+            userRecord.id = newUserId;
+          }
+          const { error: upsertErr } = await supabase.from('users').upsert(userRecord, { onConflict: 'email' });
+          if (upsertErr) {
+            console.warn('Upsert notice, attempting update by email:', upsertErr.message);
+            await supabase.from('users').update({ last_sign_in_at: new Date().toISOString() }).eq('email', userEmail);
+          }
         } catch (upsertErr) {
           console.warn('Could not write new account to users table:', upsertErr);
         }
